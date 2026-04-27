@@ -1,3 +1,5 @@
+source [file normalize "scripts/vivado_threads.tcl"]
+
 set proj_dir [file normalize "build/vivado_ed25519_ht_fe17_mul_pipe_synth"]
 set clk_period [expr {[info exists ::env(CLK_PERIOD)] ? $::env(CLK_PERIOD) : 4.000}]
 file mkdir $proj_dir
