@@ -21,8 +21,8 @@ module ed25519_ht_fe17_mul_pipe (
     logic [63:0] coeff_q    [0:28];
     logic [79:0] fold_next  [0:14];
     logic [79:0] fold_q     [0:14];
-    logic [95:0] carry_next [0:17][0:14];
-    logic [95:0] carry_q    [0:17][0:14];
+    logic [95:0] carry_next [0:23][0:14];
+    logic [95:0] carry_q    [0:23][0:14];
 
     logic [254:0] packed_next;
     logic [254:0] packed_q;
@@ -30,7 +30,7 @@ module ed25519_ht_fe17_mul_pipe (
     logic [254:0] reduced_once_q;
     logic [254:0] reduced_twice;
     logic [254:0] field_p;
-    logic [24:0] valid_pipe;
+    logic [30:0] valid_pipe;
 
     always_comb begin
         for (int i = 0; i < FE17_LIMBS; i++) begin
@@ -98,82 +98,106 @@ module ed25519_ht_fe17_mul_pipe (
         logic [95:0] fold_ext [0:14];
         for (int i = 0; i < FE17_LIMBS; i++)
             fold_ext[i] = 96'(fold_q[i]);
-        carry_group(fold_ext, carry_next[0], 0, 2, 1'b0);
+        carry_group(fold_ext, carry_next[0], 0, 1, 1'b0);
     end
 
     always_comb begin
-        carry_group(carry_q[0], carry_next[1], 3, 5, 1'b0);
+        carry_group(carry_q[0], carry_next[1], 2, 3, 1'b0);
     end
 
     always_comb begin
-        carry_group(carry_q[1], carry_next[2], 6, 8, 1'b0);
+        carry_group(carry_q[1], carry_next[2], 4, 5, 1'b0);
     end
 
     always_comb begin
-        carry_group(carry_q[2], carry_next[3], 9, 11, 1'b0);
+        carry_group(carry_q[2], carry_next[3], 6, 7, 1'b0);
     end
 
     always_comb begin
-        carry_group(carry_q[3], carry_next[4], 12, 13, 1'b0);
+        carry_group(carry_q[3], carry_next[4], 8, 9, 1'b0);
     end
 
     always_comb begin
-        carry_group(carry_q[4], carry_next[5], 14, 14, 1'b1);
+        carry_group(carry_q[4], carry_next[5], 10, 11, 1'b0);
     end
 
     always_comb begin
-        carry_group(carry_q[5], carry_next[6], 0, 2, 1'b0);
+        carry_group(carry_q[5], carry_next[6], 12, 13, 1'b0);
     end
 
     always_comb begin
-        carry_group(carry_q[6], carry_next[7], 3, 5, 1'b0);
+        carry_group(carry_q[6], carry_next[7], 14, 14, 1'b1);
     end
 
     always_comb begin
-        carry_group(carry_q[7], carry_next[8], 6, 8, 1'b0);
+        carry_group(carry_q[7], carry_next[8], 0, 1, 1'b0);
     end
 
     always_comb begin
-        carry_group(carry_q[8], carry_next[9], 9, 11, 1'b0);
+        carry_group(carry_q[8], carry_next[9], 2, 3, 1'b0);
     end
 
     always_comb begin
-        carry_group(carry_q[9], carry_next[10], 12, 13, 1'b0);
+        carry_group(carry_q[9], carry_next[10], 4, 5, 1'b0);
     end
 
     always_comb begin
-        carry_group(carry_q[10], carry_next[11], 14, 14, 1'b1);
+        carry_group(carry_q[10], carry_next[11], 6, 7, 1'b0);
     end
 
     always_comb begin
-        carry_group(carry_q[11], carry_next[12], 0, 2, 1'b0);
+        carry_group(carry_q[11], carry_next[12], 8, 9, 1'b0);
     end
 
     always_comb begin
-        carry_group(carry_q[12], carry_next[13], 3, 5, 1'b0);
+        carry_group(carry_q[12], carry_next[13], 10, 11, 1'b0);
     end
 
     always_comb begin
-        carry_group(carry_q[13], carry_next[14], 6, 8, 1'b0);
+        carry_group(carry_q[13], carry_next[14], 12, 13, 1'b0);
     end
 
     always_comb begin
-        carry_group(carry_q[14], carry_next[15], 9, 11, 1'b0);
+        carry_group(carry_q[14], carry_next[15], 14, 14, 1'b1);
     end
 
     always_comb begin
-        carry_group(carry_q[15], carry_next[16], 12, 13, 1'b0);
+        carry_group(carry_q[15], carry_next[16], 0, 1, 1'b0);
     end
 
     always_comb begin
-        carry_group(carry_q[16], carry_next[17], 14, 14, 1'b1);
+        carry_group(carry_q[16], carry_next[17], 2, 3, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[17], carry_next[18], 4, 5, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[18], carry_next[19], 6, 7, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[19], carry_next[20], 8, 9, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[20], carry_next[21], 10, 11, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[21], carry_next[22], 12, 13, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[22], carry_next[23], 14, 14, 1'b1);
     end
 
     always_comb begin
         packed_next = 255'd0;
         field_p = 255'd0;
         for (int i = 0; i < FE17_LIMBS; i++) begin
-            packed_next[i * FE17_LIMB_BITS +: FE17_LIMB_BITS] = carry_q[17][i][16:0];
+            packed_next[i * FE17_LIMB_BITS +: FE17_LIMB_BITS] = carry_q[23][i][16:0];
             field_p[i * FE17_LIMB_BITS +: FE17_LIMB_BITS] = (i == 0) ? 17'h1ffed : LIMB_MASK;
         end
 
@@ -183,7 +207,7 @@ module ed25519_ht_fe17_mul_pipe (
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            valid_pipe <= 25'd0;
+            valid_pipe <= 31'd0;
             out_valid <= 1'b0;
             out <= '0;
             packed_q <= 255'd0;
@@ -201,12 +225,12 @@ module ed25519_ht_fe17_mul_pipe (
             end
             for (int i = 0; i < FE17_LIMBS; i++) begin
                 fold_q[i] <= 80'd0;
-                for (int s = 0; s < 18; s++)
+                for (int s = 0; s < 24; s++)
                     carry_q[s][i] <= 96'd0;
             end
         end else begin
-            valid_pipe <= {valid_pipe[23:0], in_valid};
-            out_valid <= valid_pipe[24];
+            valid_pipe <= {valid_pipe[29:0], in_valid};
+            out_valid <= valid_pipe[30];
 
             for (int i = 0; i < FE17_LIMBS; i++) begin
                 for (int j = 0; j < FE17_LIMBS; j++) begin
@@ -221,7 +245,7 @@ module ed25519_ht_fe17_mul_pipe (
             end
             for (int i = 0; i < FE17_LIMBS; i++) begin
                 fold_q[i] <= fold_next[i];
-                for (int s = 0; s < 18; s++)
+                for (int s = 0; s < 24; s++)
                     carry_q[s][i] <= carry_next[s][i];
             end
             packed_q <= packed_next;
