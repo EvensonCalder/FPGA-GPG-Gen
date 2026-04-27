@@ -25,10 +25,12 @@ module ed25519_ht_fe17_mul_pipe (
     logic [95:0] carry_q    [0:17][0:14];
 
     logic [254:0] packed_next;
+    logic [254:0] packed_q;
     logic [254:0] reduced_once;
+    logic [254:0] reduced_once_q;
     logic [254:0] reduced_twice;
     logic [254:0] field_p;
-    logic [22:0] valid_pipe;
+    logic [24:0] valid_pipe;
 
     always_comb begin
         for (int i = 0; i < FE17_LIMBS; i++) begin
@@ -175,15 +177,17 @@ module ed25519_ht_fe17_mul_pipe (
             field_p[i * FE17_LIMB_BITS +: FE17_LIMB_BITS] = (i == 0) ? 17'h1ffed : LIMB_MASK;
         end
 
-        reduced_once = (packed_next >= field_p) ? (packed_next - field_p) : packed_next;
-        reduced_twice = (reduced_once >= field_p) ? (reduced_once - field_p) : reduced_once;
+        reduced_once = (packed_q >= field_p) ? (packed_q - field_p) : packed_q;
+        reduced_twice = (reduced_once_q >= field_p) ? (reduced_once_q - field_p) : reduced_once_q;
     end
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            valid_pipe <= 23'd0;
+            valid_pipe <= 25'd0;
             out_valid <= 1'b0;
             out <= '0;
+            packed_q <= 255'd0;
+            reduced_once_q <= 255'd0;
             for (int i = 0; i < FE17_LIMBS; i++) begin
                 for (int j = 0; j < FE17_LIMBS; j++) begin
                     product_q[i][j] <= 34'd0;
@@ -201,8 +205,8 @@ module ed25519_ht_fe17_mul_pipe (
                     carry_q[s][i] <= 96'd0;
             end
         end else begin
-            valid_pipe <= {valid_pipe[21:0], in_valid};
-            out_valid <= valid_pipe[22];
+            valid_pipe <= {valid_pipe[23:0], in_valid};
+            out_valid <= valid_pipe[24];
 
             for (int i = 0; i < FE17_LIMBS; i++) begin
                 for (int j = 0; j < FE17_LIMBS; j++) begin
@@ -220,6 +224,8 @@ module ed25519_ht_fe17_mul_pipe (
                 for (int s = 0; s < 18; s++)
                     carry_q[s][i] <= carry_next[s][i];
             end
+            packed_q <= packed_next;
+            reduced_once_q <= reduced_once;
             out <= fe17_t'(reduced_twice);
         end
     end
