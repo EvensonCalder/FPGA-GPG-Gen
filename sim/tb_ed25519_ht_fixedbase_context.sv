@@ -2,7 +2,9 @@
 
 import ed25519_ht_fe17_pkg::*;
 
-module tb_ed25519_ht_fixedbase_context;
+module tb_ed25519_ht_fixedbase_context #(
+    parameter string INIT_FILE = "build/ht_fixedbase_table.mem"
+);
     logic clk = 1'b0;
     logic rst_n = 1'b0;
     always #2 clk = ~clk;
@@ -23,7 +25,9 @@ module tb_ed25519_ht_fixedbase_context;
         .r_X(ref_X), .r_Y(ref_Y), .r_Z(ref_Z), .r_T(ref_T), .done(done_ref)
     );
 
-    ed25519_ht_fixedbase_context u_ht (
+    ed25519_ht_fixedbase_context #(
+        .INIT_FILE(INIT_FILE)
+    ) u_ht (
         .clk(clk), .rst_n(rst_n), .start(start_ht), .scalar(scalar),
         .r_X(ht_X), .r_Y(ht_Y), .r_Z(ht_Z), .r_T(ht_T), .done(done_ht)
     );

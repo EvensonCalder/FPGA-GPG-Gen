@@ -31,13 +31,11 @@ def ext_double(p):
     xx = x * x % P
     yy = y * y % P
     zz2 = 2 * z * z % P
-    a = xx
-    b = yy
-    e = ((x + y) * (x + y) - a - b) % P
-    g = (b + a) % P
-    f = (g - zz2) % P
-    h = (b - a) % P
-    return e * f % P, g * h % P, f * g % P, e * h % P
+    e = ((x + y) * (x + y) - xx - yy) % P
+    g = (yy + xx) % P
+    h = (yy - xx) % P
+    f = (zz2 - h) % P
+    return e * f % P, g * h % P, h * f % P, e * g % P
 
 
 def niels_from_ext(q):

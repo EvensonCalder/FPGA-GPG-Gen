@@ -102,8 +102,8 @@ module ed25519_ht_fe17_dbl (
                 mul1_valid = 1'b1; mul1_a = g_reg; mul1_b = h_reg;
             end
             ST_MUL_ZT_START: begin
-                mul0_valid = 1'b1; mul0_a = f_reg; mul0_b = g_reg;
-                mul1_valid = 1'b1; mul1_a = e_reg; mul1_b = h_reg;
+                mul0_valid = 1'b1; mul0_a = h_reg; mul0_b = f_reg;
+                mul1_valid = 1'b1; mul1_a = e_reg; mul1_b = g_reg;
             end
             default: begin
             end
@@ -159,8 +159,8 @@ module ed25519_ht_fe17_dbl (
                     c_reg <= fe_add(zz, zz);
                     e_reg <= fe_sub(fe_sub(xy2, xx), yy);
                     g_reg <= fe_add(yy, xx);
-                    f_reg <= fe_sub(fe_add(yy, xx), fe_add(zz, zz));
                     h_reg <= fe_sub(yy, xx);
+                    f_reg <= fe_sub(fe_add(zz, zz), fe_sub(yy, xx));
                     state <= ST_MUL_XY_START;
                 end
                 ST_MUL_XY_START: state <= ST_MUL_XY_WAIT;

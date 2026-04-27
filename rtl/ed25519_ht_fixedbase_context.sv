@@ -2,7 +2,9 @@
 
 import ed25519_ht_fe17_pkg::*;
 
-module ed25519_ht_fixedbase_context (
+module ed25519_ht_fixedbase_context #(
+    parameter string INIT_FILE = "build/ht_fixedbase_table.mem"
+) (
     input  logic         clk,
     input  logic         rst_n,
     input  logic         start,
@@ -58,7 +60,9 @@ module ed25519_ht_fixedbase_context (
         .digit(digit)
     );
 
-    ed25519_ht_fixedbase_table u_select (
+    ed25519_ht_fixedbase_table #(
+        .INIT_FILE(INIT_FILE)
+    ) u_select (
         .clk(clk),
         .rst_n(rst_n),
         .start(select_start),
