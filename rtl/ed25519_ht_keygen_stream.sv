@@ -1,7 +1,8 @@
 `timescale 1ns / 1ps
 
 module ed25519_ht_keygen_stream #(
-    parameter integer LANES = 1
+    parameter integer LANES = 1,
+    parameter string INIT_FILE = "build/ht_fixedbase_table.mem"
 ) (
     input  logic         clk,
     input  logic         rst_n,
@@ -34,7 +35,9 @@ module ed25519_ht_keygen_stream #(
     assign seed_ready = !lane_busy && !result_valid;
     assign lane_start = seed_valid && seed_ready;
 
-    ed25519_keygen_core u_golden_lane (
+    ed25519_ht_keygen_core #(
+        .INIT_FILE(INIT_FILE)
+    ) u_lane (
         .clk(clk),
         .rst_n(rst_n),
         .start(lane_start),

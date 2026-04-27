@@ -1,6 +1,8 @@
 `timescale 1ns / 1ps
 
-module tb_ed25519_ht_keygen_stream;
+module tb_ed25519_ht_keygen_stream #(
+    parameter string INIT_FILE = "build/ht_fixedbase_table.mem"
+);
     logic clk = 1'b0;
     logic rst_n = 1'b0;
     always #5 clk = ~clk;
@@ -17,7 +19,9 @@ module tb_ed25519_ht_keygen_stream;
     logic [63:0] stall_seed_count;
     logic [63:0] stall_output_count;
 
-    ed25519_ht_keygen_stream dut (
+    ed25519_ht_keygen_stream #(
+        .INIT_FILE(INIT_FILE)
+    ) dut (
         .clk(clk),
         .rst_n(rst_n),
         .seed_valid(seed_valid),
