@@ -17,6 +17,7 @@ module ed25519_ht_fe17_square_pipe (
     logic [33:0] cross_next [0:14][0:14];
     logic [33:0] cross_q    [0:14][0:14];
     fe17_t a_q;
+    logic in_valid_q;
     logic [63:0] coeff_part_next [0:28][0:2];
     logic [63:0] coeff_part_q    [0:28][0:2];
     logic [63:0] coeff_next [0:28];
@@ -147,6 +148,7 @@ module ed25519_ht_fe17_square_pipe (
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             valid_pipe <= 32'd0;
+            in_valid_q <= 1'b0;
             out_valid <= 1'b0;
             out <= '0;
             a_q <= '0;
@@ -168,9 +170,11 @@ module ed25519_ht_fe17_square_pipe (
                     carry_q[s][i] <= 96'd0;
             end
         end else begin
-            valid_pipe <= {valid_pipe[30:0], in_valid};
+            in_valid_q <= in_valid;
+            valid_pipe <= {valid_pipe[30:0], in_valid_q};
             out_valid <= valid_pipe[31];
-            a_q <= a;
+            if (in_valid)
+                a_q <= a;
 
             for (int i = 0; i < FE17_LIMBS; i++) begin
                 diag_q[i] <= diag_next[i];
