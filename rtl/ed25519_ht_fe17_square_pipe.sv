@@ -12,9 +12,9 @@ module ed25519_ht_fe17_square_pipe (
 );
     localparam logic [16:0] LIMB_MASK = 17'h1ffff;
 
-    logic [33:0] diag_next [0:14];
+    (* use_dsp = "yes" *) logic [33:0] diag_next [0:14];
     logic [33:0] diag_q    [0:14];
-    logic [33:0] cross_next [0:14][0:14];
+    (* use_dsp = "yes" *) logic [33:0] cross_next [0:14][0:14];
     logic [33:0] cross_q    [0:14][0:14];
     fe17_t a_q;
     logic in_valid_q;

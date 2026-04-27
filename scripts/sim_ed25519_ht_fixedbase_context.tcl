@@ -12,6 +12,7 @@ foreach f {
     rtl/ed25519_ht_fe10_to_fe17.sv
     rtl/ed25519_ht_fe17_madd.sv
     rtl/ed25519_ht_fe17_dbl.sv
+    rtl/ed25519_ht_fe17_group_engine.sv
     rtl/ed25519_ht_fixedbase_table.sv
     rtl/ed25519_ht_fixedbase_context.sv
     rtl/ed25519_scalar_recode_4bit.sv
