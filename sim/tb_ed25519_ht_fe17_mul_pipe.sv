@@ -4,7 +4,7 @@ import ed25519_ht_fe17_pkg::*;
 
 module tb_ed25519_ht_fe17_mul_pipe;
     localparam int VECTOR_COUNT = 45;
-    localparam int LATENCY = 6;
+    localparam int LATENCY = 23;
 
     logic clk = 1'b0;
     logic rst_n = 1'b0;

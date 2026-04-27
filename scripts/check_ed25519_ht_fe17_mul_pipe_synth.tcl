@@ -15,3 +15,4 @@ synth_design -top ed25519_ht_fe17_mul_pipe -part xc7k160tffg676-2
 create_clock -period 4.000 -name clk [get_ports clk]
 report_utilization -file "$proj_dir/utilization.rpt"
 report_timing_summary -file "$proj_dir/timing_summary.rpt"
+report_timing -max_paths 10 -file "$proj_dir/timing_paths.rpt"

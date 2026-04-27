@@ -13,33 +13,46 @@ module ed25519_ht_fe17_mul_pipe (
 );
     localparam logic [16:0] LIMB_MASK = 17'h1ffff;
 
+    logic [33:0] product_next [0:14][0:14];
+    logic [33:0] product_q    [0:14][0:14];
+    logic [63:0] coeff_part_next [0:28][0:2];
+    logic [63:0] coeff_part_q    [0:28][0:2];
     logic [63:0] coeff_next [0:28];
     logic [63:0] coeff_q    [0:28];
     logic [79:0] fold_next  [0:14];
     logic [79:0] fold_q     [0:14];
-    logic [95:0] carry1_next [0:14];
-    logic [95:0] carry1_q    [0:14];
-    logic [95:0] carry2_next [0:14];
-    logic [95:0] carry2_q    [0:14];
-    logic [95:0] carry3_next [0:14];
-    logic [95:0] carry3_q    [0:14];
+    logic [95:0] carry_next [0:17][0:14];
+    logic [95:0] carry_q    [0:17][0:14];
 
     logic [254:0] packed_next;
     logic [254:0] reduced_once;
     logic [254:0] reduced_twice;
     logic [254:0] field_p;
-    logic [5:0] valid_pipe;
+    logic [22:0] valid_pipe;
 
     always_comb begin
-        for (int i = 0; i < 29; i++)
+        for (int i = 0; i < FE17_LIMBS; i++) begin
+            for (int j = 0; j < FE17_LIMBS; j++) begin
+                product_next[i][j] = 34'(fe17_limb(a, i)) * 34'(fe17_limb(b, j));
+            end
+        end
+    end
+
+    always_comb begin
+        for (int i = 0; i < 29; i++) begin
+            for (int g = 0; g < 3; g++)
+                coeff_part_next[i][g] = 64'd0;
             coeff_next[i] = 64'd0;
+        end
 
         for (int i = 0; i < FE17_LIMBS; i++) begin
             for (int j = 0; j < FE17_LIMBS; j++) begin
-                coeff_next[i + j] = coeff_next[i + j]
-                    + (64'(fe17_limb(a, i)) * 64'(fe17_limb(b, j)));
+                coeff_part_next[i + j][i / 5] = coeff_part_next[i + j][i / 5] + 64'(product_q[i][j]);
             end
         end
+
+        for (int i = 0; i < 29; i++)
+            coeff_next[i] = coeff_part_q[i][0] + coeff_part_q[i][1] + coeff_part_q[i][2];
     end
 
     always_comb begin
@@ -50,9 +63,12 @@ module ed25519_ht_fe17_mul_pipe (
         end
     end
 
-    task automatic carry_pass(
+    task automatic carry_group(
         input  logic [95:0] in_limbs [0:14],
         output logic [95:0] out_limbs [0:14]
+        ,input int first_limb
+        ,input int last_limb
+        ,input bit wrap_final
     );
         logic [95:0] tmp [0:14];
         logic [95:0] carry;
@@ -60,15 +76,16 @@ module ed25519_ht_fe17_mul_pipe (
             for (int i = 0; i < FE17_LIMBS; i++)
                 tmp[i] = in_limbs[i];
 
-            for (int i = 0; i < FE17_LIMBS - 1; i++) begin
+            for (int i = first_limb; i <= last_limb; i++) begin
                 carry = tmp[i] >> FE17_LIMB_BITS;
                 tmp[i] = tmp[i] & 96'(LIMB_MASK);
-                tmp[i + 1] = tmp[i + 1] + carry;
+                if (i == FE17_LIMBS - 1)
+                    tmp[0] = tmp[0] + (carry * 96'd19);
+                else if (i == last_limb && !wrap_final)
+                    tmp[i + 1] = tmp[i + 1] + carry;
+                else if (i != last_limb)
+                    tmp[i + 1] = tmp[i + 1] + carry;
             end
-
-            carry = tmp[FE17_LIMBS - 1] >> FE17_LIMB_BITS;
-            tmp[FE17_LIMBS - 1] = tmp[FE17_LIMBS - 1] & 96'(LIMB_MASK);
-            tmp[0] = tmp[0] + (carry * 96'd19);
 
             for (int i = 0; i < FE17_LIMBS; i++)
                 out_limbs[i] = tmp[i];
@@ -79,22 +96,82 @@ module ed25519_ht_fe17_mul_pipe (
         logic [95:0] fold_ext [0:14];
         for (int i = 0; i < FE17_LIMBS; i++)
             fold_ext[i] = 96'(fold_q[i]);
-        carry_pass(fold_ext, carry1_next);
+        carry_group(fold_ext, carry_next[0], 0, 2, 1'b0);
     end
 
     always_comb begin
-        carry_pass(carry1_q, carry2_next);
+        carry_group(carry_q[0], carry_next[1], 3, 5, 1'b0);
     end
 
     always_comb begin
-        carry_pass(carry2_q, carry3_next);
+        carry_group(carry_q[1], carry_next[2], 6, 8, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[2], carry_next[3], 9, 11, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[3], carry_next[4], 12, 13, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[4], carry_next[5], 14, 14, 1'b1);
+    end
+
+    always_comb begin
+        carry_group(carry_q[5], carry_next[6], 0, 2, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[6], carry_next[7], 3, 5, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[7], carry_next[8], 6, 8, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[8], carry_next[9], 9, 11, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[9], carry_next[10], 12, 13, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[10], carry_next[11], 14, 14, 1'b1);
+    end
+
+    always_comb begin
+        carry_group(carry_q[11], carry_next[12], 0, 2, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[12], carry_next[13], 3, 5, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[13], carry_next[14], 6, 8, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[14], carry_next[15], 9, 11, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[15], carry_next[16], 12, 13, 1'b0);
+    end
+
+    always_comb begin
+        carry_group(carry_q[16], carry_next[17], 14, 14, 1'b1);
     end
 
     always_comb begin
         packed_next = 255'd0;
         field_p = 255'd0;
         for (int i = 0; i < FE17_LIMBS; i++) begin
-            packed_next[i * FE17_LIMB_BITS +: FE17_LIMB_BITS] = carry3_q[i][16:0];
+            packed_next[i * FE17_LIMB_BITS +: FE17_LIMB_BITS] = carry_q[17][i][16:0];
             field_p[i * FE17_LIMB_BITS +: FE17_LIMB_BITS] = (i == 0) ? 17'h1ffed : LIMB_MASK;
         end
 
@@ -104,28 +181,44 @@ module ed25519_ht_fe17_mul_pipe (
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            valid_pipe <= 6'd0;
+            valid_pipe <= 23'd0;
             out_valid <= 1'b0;
             out <= '0;
+            for (int i = 0; i < FE17_LIMBS; i++) begin
+                for (int j = 0; j < FE17_LIMBS; j++) begin
+                    product_q[i][j] <= 34'd0;
+                end
+            end
             for (int i = 0; i < 29; i++)
                 coeff_q[i] <= 64'd0;
+            for (int i = 0; i < 29; i++) begin
+                for (int g = 0; g < 3; g++)
+                    coeff_part_q[i][g] <= 64'd0;
+            end
             for (int i = 0; i < FE17_LIMBS; i++) begin
                 fold_q[i] <= 80'd0;
-                carry1_q[i] <= 96'd0;
-                carry2_q[i] <= 96'd0;
-                carry3_q[i] <= 96'd0;
+                for (int s = 0; s < 18; s++)
+                    carry_q[s][i] <= 96'd0;
             end
         end else begin
-            valid_pipe <= {valid_pipe[4:0], in_valid};
-            out_valid <= valid_pipe[5];
+            valid_pipe <= {valid_pipe[21:0], in_valid};
+            out_valid <= valid_pipe[22];
 
+            for (int i = 0; i < FE17_LIMBS; i++) begin
+                for (int j = 0; j < FE17_LIMBS; j++) begin
+                    product_q[i][j] <= product_next[i][j];
+                end
+            end
             for (int i = 0; i < 29; i++)
                 coeff_q[i] <= coeff_next[i];
+            for (int i = 0; i < 29; i++) begin
+                for (int g = 0; g < 3; g++)
+                    coeff_part_q[i][g] <= coeff_part_next[i][g];
+            end
             for (int i = 0; i < FE17_LIMBS; i++) begin
                 fold_q[i] <= fold_next[i];
-                carry1_q[i] <= carry1_next[i];
-                carry2_q[i] <= carry2_next[i];
-                carry3_q[i] <= carry3_next[i];
+                for (int s = 0; s < 18; s++)
+                    carry_q[s][i] <= carry_next[s][i];
             end
             out <= fe17_t'(reduced_twice);
         end
