@@ -3,6 +3,9 @@ source [file normalize "scripts/vivado_threads.tcl"]
 set proj_dir [file normalize "build/vivado_ed25519_ht_keygen_stream_impl"]
 set ref_dir [file normalize "saif_ed25519_ref"]
 set clk_period [expr {[info exists ::env(CLK_PERIOD)] ? $::env(CLK_PERIOD) : "10.000"}]
+set synth_directive [expr {[info exists ::env(SYNTH_DIRECTIVE)] ? $::env(SYNTH_DIRECTIVE) : "AreaOptimized_high"}]
+set opt_directive [expr {[info exists ::env(OPT_DIRECTIVE)] ? $::env(OPT_DIRECTIVE) : "ExploreArea"}]
+set max_dsp [expr {[info exists ::env(MAX_DSP)] ? $::env(MAX_DSP) : "600"}]
 file mkdir $proj_dir
 create_project ed25519_ht_keygen_stream_impl $proj_dir -part xc7k160tffg676-2 -force
 
@@ -35,9 +38,10 @@ foreach dir {fe_modules others p3_tobytes sha512} {
 
 set_property top ed25519_ht_keygen_stream_impl_top [current_fileset]
 set_property generic "INIT_FILE=[file normalize build/ht_fixedbase_table.mem]" [current_fileset]
-synth_design -top ed25519_ht_keygen_stream_impl_top -part xc7k160tffg676-2
+synth_design -top ed25519_ht_keygen_stream_impl_top -part xc7k160tffg676-2 -directive $synth_directive -flatten_hierarchy rebuilt -max_dsp $max_dsp
 create_clock -period $clk_period -name clk [get_ports clk]
-opt_design
+opt_design -directive $opt_directive
+report_utilization -file "$proj_dir/post_opt_utilization.rpt"
 place_design
 phys_opt_design
 route_design
