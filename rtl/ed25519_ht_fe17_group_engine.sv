@@ -26,23 +26,35 @@ module ed25519_ht_fe17_group_engine (
     typedef enum logic [4:0] {
         ST_IDLE,
         ST_MADD_INIT,
-        ST_MADD_MUL_AB_START,
-        ST_MADD_MUL_AB_WAIT,
-        ST_MADD_MUL_CD_START,
-        ST_MADD_MUL_CD_WAIT,
+        ST_MADD_MUL_B_START,
+        ST_MADD_MUL_B_WAIT,
+        ST_MADD_MUL_A_START,
+        ST_MADD_MUL_A_WAIT,
+        ST_MADD_MUL_C_START,
+        ST_MADD_MUL_C_WAIT,
+        ST_MADD_MUL_D_START,
+        ST_MADD_MUL_D_WAIT,
         ST_MADD_EFGH,
-        ST_MADD_MUL_XY_START,
-        ST_MADD_MUL_XY_WAIT,
-        ST_MADD_MUL_ZT_START,
-        ST_MADD_MUL_ZT_WAIT,
+        ST_MADD_MUL_X_START,
+        ST_MADD_MUL_X_WAIT,
+        ST_MADD_MUL_Y_START,
+        ST_MADD_MUL_Y_WAIT,
+        ST_MADD_MUL_Z_START,
+        ST_MADD_MUL_Z_WAIT,
+        ST_MADD_MUL_T_START,
+        ST_MADD_MUL_T_WAIT,
         ST_DBL_SQ_START,
         ST_DBL_SQ_WAIT,
         ST_DBL_EGH,
         ST_DBL_EF,
-        ST_DBL_MUL_XY_START,
-        ST_DBL_MUL_XY_WAIT,
-        ST_DBL_MUL_ZT_START,
-        ST_DBL_MUL_ZT_WAIT,
+        ST_DBL_MUL_X_START,
+        ST_DBL_MUL_X_WAIT,
+        ST_DBL_MUL_Y_START,
+        ST_DBL_MUL_Y_WAIT,
+        ST_DBL_MUL_Z_START,
+        ST_DBL_MUL_Z_WAIT,
+        ST_DBL_MUL_T_START,
+        ST_DBL_MUL_T_WAIT,
         ST_DONE
     } state_t;
 
@@ -56,10 +68,9 @@ module ed25519_ht_fe17_group_engine (
     fe17_t xx, yy, zz, xy2;
     fe17_t xy_minus_xx, zz2_reg;
 
-    logic mul0_valid, mul1_valid, sq_valid;
-    logic mul0_done, mul1_done, sq_done;
+    logic mul0_valid, sq_valid;
+    logic mul0_done, sq_done;
     fe17_t mul0_a, mul0_b, mul0_y;
-    fe17_t mul1_a, mul1_b, mul1_y;
     fe17_t sq_a, sq_y;
 
     assign busy = state != ST_IDLE;
@@ -87,11 +98,6 @@ module ed25519_ht_fe17_group_engine (
         .a(mul0_a), .b(mul0_b), .out_valid(mul0_done), .out(mul0_y)
     );
 
-    ed25519_ht_fe17_mul_pipe u_mul1 (
-        .clk(clk), .rst_n(rst_n), .in_valid(mul1_valid),
-        .a(mul1_a), .b(mul1_b), .out_valid(mul1_done), .out(mul1_y)
-    );
-
     ed25519_ht_fe17_square_pipe u_square (
         .clk(clk), .rst_n(rst_n), .in_valid(sq_valid),
         .a(sq_a), .out_valid(sq_done), .out(sq_y)
@@ -99,33 +105,42 @@ module ed25519_ht_fe17_group_engine (
 
     always_comb begin
         mul0_valid = 1'b0;
-        mul1_valid = 1'b0;
         sq_valid = 1'b0;
         mul0_a = '0; mul0_b = '0;
-        mul1_a = '0; mul1_b = '0;
         sq_a = '0;
 
         unique case (state)
-            ST_MADD_MUL_AB_START: begin
+            ST_MADD_MUL_B_START: begin
                 mul0_valid = 1'b1; mul0_a = yplusx;  mul0_b = q_yplusx;
-                mul1_valid = 1'b1; mul1_a = yminusx; mul1_b = q_yminusx;
             end
-            ST_MADD_MUL_CD_START: begin
+            ST_MADD_MUL_A_START: begin
+                mul0_valid = 1'b1; mul0_a = yminusx; mul0_b = q_yminusx;
+            end
+            ST_MADD_MUL_C_START: begin
                 mul0_valid = 1'b1; mul0_a = p_T; mul0_b = q_xy2d;
-                mul1_valid = 1'b1; mul1_a = p_Z; mul1_b = fe17_t'(255'd2);
             end
-            ST_MADD_MUL_XY_START,
-            ST_DBL_MUL_XY_START: begin
+            ST_MADD_MUL_D_START: begin
+                mul0_valid = 1'b1; mul0_a = p_Z; mul0_b = fe17_t'(255'd2);
+            end
+            ST_MADD_MUL_X_START,
+            ST_DBL_MUL_X_START: begin
                 mul0_valid = 1'b1; mul0_a = e_reg; mul0_b = f_reg;
-                mul1_valid = 1'b1; mul1_a = g_reg; mul1_b = h_reg;
             end
-            ST_MADD_MUL_ZT_START: begin
+            ST_MADD_MUL_Y_START,
+            ST_DBL_MUL_Y_START: begin
+                mul0_valid = 1'b1; mul0_a = g_reg; mul0_b = h_reg;
+            end
+            ST_MADD_MUL_Z_START: begin
                 mul0_valid = 1'b1; mul0_a = f_reg; mul0_b = g_reg;
-                mul1_valid = 1'b1; mul1_a = e_reg; mul1_b = h_reg;
             end
-            ST_DBL_MUL_ZT_START: begin
+            ST_MADD_MUL_T_START: begin
+                mul0_valid = 1'b1; mul0_a = e_reg; mul0_b = h_reg;
+            end
+            ST_DBL_MUL_Z_START: begin
                 mul0_valid = 1'b1; mul0_a = h_reg; mul0_b = f_reg;
-                mul1_valid = 1'b1; mul1_a = e_reg; mul1_b = g_reg;
+            end
+            ST_DBL_MUL_T_START: begin
+                mul0_valid = 1'b1; mul0_a = e_reg; mul0_b = g_reg;
             end
             ST_DBL_SQ_START: begin
                 sq_valid = 1'b1;
@@ -171,21 +186,33 @@ module ed25519_ht_fe17_group_engine (
                 ST_MADD_INIT: begin
                     yplusx <= fe_add(p_Y, p_X);
                     yminusx <= fe_sub(p_Y, p_X);
-                    state <= ST_MADD_MUL_AB_START;
+                    state <= ST_MADD_MUL_B_START;
                 end
-                ST_MADD_MUL_AB_START: state <= ST_MADD_MUL_AB_WAIT;
-                ST_MADD_MUL_AB_WAIT: begin
-                    if (mul0_done && mul1_done) begin
+                ST_MADD_MUL_B_START: state <= ST_MADD_MUL_B_WAIT;
+                ST_MADD_MUL_B_WAIT: begin
+                    if (mul0_done) begin
                         b_reg <= mul0_y;
-                        a_reg <= mul1_y;
-                        state <= ST_MADD_MUL_CD_START;
+                        state <= ST_MADD_MUL_A_START;
                     end
                 end
-                ST_MADD_MUL_CD_START: state <= ST_MADD_MUL_CD_WAIT;
-                ST_MADD_MUL_CD_WAIT: begin
-                    if (mul0_done && mul1_done) begin
+                ST_MADD_MUL_A_START: state <= ST_MADD_MUL_A_WAIT;
+                ST_MADD_MUL_A_WAIT: begin
+                    if (mul0_done) begin
+                        a_reg <= mul0_y;
+                        state <= ST_MADD_MUL_C_START;
+                    end
+                end
+                ST_MADD_MUL_C_START: state <= ST_MADD_MUL_C_WAIT;
+                ST_MADD_MUL_C_WAIT: begin
+                    if (mul0_done) begin
                         c_reg <= mul0_y;
-                        d_reg <= mul1_y;
+                        state <= ST_MADD_MUL_D_START;
+                    end
+                end
+                ST_MADD_MUL_D_START: state <= ST_MADD_MUL_D_WAIT;
+                ST_MADD_MUL_D_WAIT: begin
+                    if (mul0_done) begin
+                        d_reg <= mul0_y;
                         state <= ST_MADD_EFGH;
                     end
                 end
@@ -194,21 +221,33 @@ module ed25519_ht_fe17_group_engine (
                     h_reg <= fe_add(b_reg, a_reg);
                     f_reg <= fe_sub(d_reg, c_reg);
                     g_reg <= fe_add(d_reg, c_reg);
-                    state <= ST_MADD_MUL_XY_START;
+                    state <= ST_MADD_MUL_X_START;
                 end
-                ST_MADD_MUL_XY_START: state <= ST_MADD_MUL_XY_WAIT;
-                ST_MADD_MUL_XY_WAIT: begin
-                    if (mul0_done && mul1_done) begin
+                ST_MADD_MUL_X_START: state <= ST_MADD_MUL_X_WAIT;
+                ST_MADD_MUL_X_WAIT: begin
+                    if (mul0_done) begin
                         r_X <= mul0_y;
-                        r_Y <= mul1_y;
-                        state <= ST_MADD_MUL_ZT_START;
+                        state <= ST_MADD_MUL_Y_START;
                     end
                 end
-                ST_MADD_MUL_ZT_START: state <= ST_MADD_MUL_ZT_WAIT;
-                ST_MADD_MUL_ZT_WAIT: begin
-                    if (mul0_done && mul1_done) begin
+                ST_MADD_MUL_Y_START: state <= ST_MADD_MUL_Y_WAIT;
+                ST_MADD_MUL_Y_WAIT: begin
+                    if (mul0_done) begin
+                        r_Y <= mul0_y;
+                        state <= ST_MADD_MUL_Z_START;
+                    end
+                end
+                ST_MADD_MUL_Z_START: state <= ST_MADD_MUL_Z_WAIT;
+                ST_MADD_MUL_Z_WAIT: begin
+                    if (mul0_done) begin
                         r_Z <= mul0_y;
-                        r_T <= mul1_y;
+                        state <= ST_MADD_MUL_T_START;
+                    end
+                end
+                ST_MADD_MUL_T_START: state <= ST_MADD_MUL_T_WAIT;
+                ST_MADD_MUL_T_WAIT: begin
+                    if (mul0_done) begin
+                        r_T <= mul0_y;
                         state <= ST_DONE;
                     end
                 end
@@ -244,21 +283,33 @@ module ed25519_ht_fe17_group_engine (
                 ST_DBL_EF: begin
                     e_reg <= fe_sub(xy_minus_xx, yy);
                     f_reg <= fe_sub(zz2_reg, h_reg);
-                    state <= ST_DBL_MUL_XY_START;
+                    state <= ST_DBL_MUL_X_START;
                 end
-                ST_DBL_MUL_XY_START: state <= ST_DBL_MUL_XY_WAIT;
-                ST_DBL_MUL_XY_WAIT: begin
-                    if (mul0_done && mul1_done) begin
+                ST_DBL_MUL_X_START: state <= ST_DBL_MUL_X_WAIT;
+                ST_DBL_MUL_X_WAIT: begin
+                    if (mul0_done) begin
                         r_X <= mul0_y;
-                        r_Y <= mul1_y;
-                        state <= ST_DBL_MUL_ZT_START;
+                        state <= ST_DBL_MUL_Y_START;
                     end
                 end
-                ST_DBL_MUL_ZT_START: state <= ST_DBL_MUL_ZT_WAIT;
-                ST_DBL_MUL_ZT_WAIT: begin
-                    if (mul0_done && mul1_done) begin
+                ST_DBL_MUL_Y_START: state <= ST_DBL_MUL_Y_WAIT;
+                ST_DBL_MUL_Y_WAIT: begin
+                    if (mul0_done) begin
+                        r_Y <= mul0_y;
+                        state <= ST_DBL_MUL_Z_START;
+                    end
+                end
+                ST_DBL_MUL_Z_START: state <= ST_DBL_MUL_Z_WAIT;
+                ST_DBL_MUL_Z_WAIT: begin
+                    if (mul0_done) begin
                         r_Z <= mul0_y;
-                        r_T <= mul1_y;
+                        state <= ST_DBL_MUL_T_START;
+                    end
+                end
+                ST_DBL_MUL_T_START: state <= ST_DBL_MUL_T_WAIT;
+                ST_DBL_MUL_T_WAIT: begin
+                    if (mul0_done) begin
+                        r_T <= mul0_y;
                         state <= ST_DONE;
                     end
                 end
