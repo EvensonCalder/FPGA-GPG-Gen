@@ -6,6 +6,7 @@ set clk_period [expr {[info exists ::env(CLK_PERIOD)] ? $::env(CLK_PERIOD) : "10
 set synth_directive [expr {[info exists ::env(SYNTH_DIRECTIVE)] ? $::env(SYNTH_DIRECTIVE) : "AreaOptimized_high"}]
 set opt_directive [expr {[info exists ::env(OPT_DIRECTIVE)] ? $::env(OPT_DIRECTIVE) : "ExploreArea"}]
 set max_dsp [expr {[info exists ::env(MAX_DSP)] ? $::env(MAX_DSP) : "600"}]
+set mul_lanes [expr {[info exists ::env(MUL_LANES)] ? $::env(MUL_LANES) : "1"}]
 file mkdir $proj_dir
 create_project ed25519_ht_keygen_stream_impl $proj_dir -part xc7k160tffg676-2 -force
 
@@ -37,7 +38,7 @@ foreach dir {fe_modules others p3_tobytes sha512} {
 }
 
 set_property top ed25519_ht_keygen_stream_impl_top [current_fileset]
-set_property generic "INIT_FILE=[file normalize build/ht_fixedbase_table.mem]" [current_fileset]
+set_property generic "INIT_FILE=[file normalize build/ht_fixedbase_table.mem] MUL_LANES=$mul_lanes" [current_fileset]
 synth_design -top ed25519_ht_keygen_stream_impl_top -part xc7k160tffg676-2 -directive $synth_directive -flatten_hierarchy rebuilt -max_dsp $max_dsp
 create_clock -period $clk_period -name clk [get_ports clk]
 opt_design -directive $opt_directive

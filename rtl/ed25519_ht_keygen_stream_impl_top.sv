@@ -1,7 +1,8 @@
 `timescale 1ns / 1ps
 
 module ed25519_ht_keygen_stream_impl_top #(
-    parameter string INIT_FILE = "build/ht_fixedbase_table.mem"
+    parameter string INIT_FILE = "build/ht_fixedbase_table.mem",
+    parameter integer MUL_LANES = 1
 ) (
     input  logic        clk,
     input  logic        rst_n,
@@ -37,7 +38,8 @@ module ed25519_ht_keygen_stream_impl_top #(
     end
 
     ed25519_ht_keygen_stream #(
-        .INIT_FILE(INIT_FILE)
+        .INIT_FILE(INIT_FILE),
+        .MUL_LANES(MUL_LANES)
     ) u_stream (
         .clk(clk),
         .rst_n(rst_n),

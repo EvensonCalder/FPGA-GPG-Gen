@@ -1,7 +1,8 @@
 `timescale 1ns / 1ps
 
 module ed25519_ht_keygen_core #(
-    parameter string INIT_FILE = "build/ht_fixedbase_table.mem"
+    parameter string INIT_FILE = "build/ht_fixedbase_table.mem",
+    parameter integer MUL_LANES = 1
 ) (
     input  logic         clk,
     input  logic         rst_n,
@@ -53,7 +54,8 @@ module ed25519_ht_keygen_core #(
     );
 
     ed25519_ht_fixedbase_core #(
-        .INIT_FILE(INIT_FILE)
+        .INIT_FILE(INIT_FILE),
+        .MUL_LANES(MUL_LANES)
     ) u_fixedbase_core (
         .clk(clk), .rst_n(rst_n), .start(start_ge),
         .scalar(clamped_secret[255:0]),

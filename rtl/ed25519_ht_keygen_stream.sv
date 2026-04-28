@@ -2,7 +2,8 @@
 
 module ed25519_ht_keygen_stream #(
     parameter integer LANES = 1,
-    parameter string INIT_FILE = "build/ht_fixedbase_table.mem"
+    parameter string INIT_FILE = "build/ht_fixedbase_table.mem",
+    parameter integer MUL_LANES = 1
 ) (
     input  logic         clk,
     input  logic         rst_n,
@@ -36,7 +37,8 @@ module ed25519_ht_keygen_stream #(
     assign lane_start = seed_valid && seed_ready;
 
     ed25519_ht_keygen_core #(
-        .INIT_FILE(INIT_FILE)
+        .INIT_FILE(INIT_FILE),
+        .MUL_LANES(MUL_LANES)
     ) u_lane (
         .clk(clk),
         .rst_n(rst_n),
