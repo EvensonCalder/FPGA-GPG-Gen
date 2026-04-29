@@ -236,6 +236,10 @@ module gpg_vanity_ht_search_top #(
         .candidate_ready(out_ready),
         .candidate_seed(out_seed),
         .candidate_public_key(out_public_key),
+        .produced_count(produced_count),
+        .accepted_count(accepted_count),
+        .stall_seed_count(stall_seed_count),
+        .stall_output_count(stall_output_count),
         .uart_tx(uart_tx)
     );
 endmodule

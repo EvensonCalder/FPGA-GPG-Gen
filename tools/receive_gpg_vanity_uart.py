@@ -21,6 +21,7 @@ CRC_LEN = 4
 FRAME_LEN = len(MAGIC) + BODY_LEN + CRC_LEN
 CLASS_COUNT = 2
 CLASS_NAMES = ("suffix", "prefix")
+HEARTBEAT_CLASS = 0xFE
 
 
 class RawSerial:
@@ -139,6 +140,7 @@ def make_frame(class_id, seed_hex, public_hex):
 
 def parse_frames(buffer):
     records = []
+    heartbeats = []
     bad_crc = 0
 
     while True:
@@ -164,13 +166,20 @@ def parse_frames(buffer):
 
         del buffer[:FRAME_LEN]
         class_id = body[0]
+        if class_id == HEARTBEAT_CLASS:
+            produced_count = int.from_bytes(body[1:9], byteorder="big")
+            accepted_count = int.from_bytes(body[9:17], byteorder="big")
+            stall_seed = int.from_bytes(body[17:25], byteorder="big")
+            stall_output = int.from_bytes(body[25:33], byteorder="big")
+            heartbeats.append((produced_count, accepted_count, stall_seed, stall_output))
+            continue
         if class_id >= CLASS_COUNT:
             continue
         seed = body[1:1 + SEED_LEN]
         public = body[1 + SEED_LEN:1 + SEED_LEN + PUBLIC_LEN]
         records.append((class_id, seed, public))
 
-    return records, bad_crc
+    return records, bad_crc, heartbeats
 
 
 def write_openpgp_secret_file(out_dir, class_id, seed, public, timestamp, sync):
@@ -219,6 +228,7 @@ def receive(args):
     buffer = bytearray()
     last_report = time.monotonic()
     last_report_total = 0
+    last_hb = None
 
     try:
         if args.input_bin:
@@ -243,8 +253,21 @@ def receive(args):
                 continue
 
             buffer.extend(chunk)
-            records, new_bad_crc = parse_frames(buffer)
+            records, new_bad_crc, heartbeats = parse_frames(buffer)
             bad_crc += new_bad_crc
+            for produced_count, accepted_count, stall_seed, stall_output in heartbeats:
+                now = time.monotonic()
+                if last_hb is not None:
+                    prev_time, prev_keys = last_hb
+                    delta_t = now - prev_time
+                    delta_k = produced_count - prev_keys
+                    keys_per_s = delta_k / delta_t if delta_t > 0 else 0.0
+                    if not args.quiet:
+                        print(f"heartbeat keys={produced_count} rate={keys_per_s:.0f} keys/s "
+                              f"accepted={accepted_count} stall_seed={stall_seed} stall_out={stall_output}",
+                              file=sys.stderr, flush=True)
+                last_hb = (now, produced_count)
+                last_report = now
             for class_id, seed, public in records:
                 write_record(files, class_id, seed, public, not args.no_fsync,
                              gpg_dir=args.gpg_dir, timestamp=args.timestamp)
