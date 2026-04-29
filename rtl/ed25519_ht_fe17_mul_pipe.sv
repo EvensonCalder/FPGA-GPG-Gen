@@ -2,7 +2,9 @@
 
 import ed25519_ht_fe17_pkg::*;
 
-module ed25519_ht_fe17_mul_pipe (
+module ed25519_ht_fe17_mul_pipe #(
+    parameter logic [23:0] CARRY_SHREG_EXTRACT = "yes"
+) (
     input  logic   clk,
     input  logic   rst_n,
     input  logic   in_valid,
@@ -25,7 +27,7 @@ module ed25519_ht_fe17_mul_pipe (
     logic [79:0] fold_next  [0:14];
     logic [79:0] fold_q     [0:14];
     logic [95:0] carry_next [0:23][0:14];
-    logic [95:0] carry_q    [0:23][0:14];
+    (* shreg_extract = CARRY_SHREG_EXTRACT *) logic [95:0] carry_q [0:23][0:14];
 
     logic [254:0] packed_next;
     logic [254:0] packed_q;
@@ -33,7 +35,7 @@ module ed25519_ht_fe17_mul_pipe (
     logic [254:0] reduced_once_q;
     logic [254:0] reduced_twice;
     logic [254:0] field_p;
-    logic [31:0] valid_pipe;
+    logic [29:0] valid_pipe;
 
     always_comb begin
         for (int i = 0; i < FE17_LIMBS; i++) begin
@@ -210,34 +212,13 @@ module ed25519_ht_fe17_mul_pipe (
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            valid_pipe <= 32'd0;
+            valid_pipe <= 30'd0;
             in_valid_q <= 1'b0;
             out_valid <= 1'b0;
-            out <= '0;
-            a_q <= '0;
-            b_q <= '0;
-            packed_q <= 255'd0;
-            reduced_once_q <= 255'd0;
-            for (int i = 0; i < FE17_LIMBS; i++) begin
-                for (int j = 0; j < FE17_LIMBS; j++) begin
-                    product_q[i][j] <= 34'd0;
-                end
-            end
-            for (int i = 0; i < 29; i++)
-                coeff_q[i] <= 64'd0;
-            for (int i = 0; i < 29; i++) begin
-                for (int g = 0; g < 3; g++)
-                    coeff_part_q[i][g] <= 64'd0;
-            end
-            for (int i = 0; i < FE17_LIMBS; i++) begin
-                fold_q[i] <= 80'd0;
-                for (int s = 0; s < 24; s++)
-                    carry_q[s][i] <= 96'd0;
-            end
         end else begin
             in_valid_q <= in_valid;
-            valid_pipe <= {valid_pipe[30:0], in_valid_q};
-            out_valid <= valid_pipe[31];
+            valid_pipe <= {valid_pipe[28:0], in_valid_q};
+            out_valid <= valid_pipe[29];
             if (in_valid) begin
                 a_q <= a;
                 b_q <= b;

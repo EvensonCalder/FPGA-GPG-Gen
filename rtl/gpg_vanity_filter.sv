@@ -1,7 +1,9 @@
 `timescale 1ns / 1ps
 
 module gpg_vanity_filter #(
-    parameter DEBUG_ACCEPT_ALL = 1'b0
+    parameter DEBUG_ACCEPT_ALL = 1'b0,
+    parameter MATCH_SUFFIX = 1'b1,
+    parameter MATCH_PREFIX = 1'b1
 ) (
     input  logic         clk,
     input  logic         rst_n,
@@ -41,7 +43,9 @@ module gpg_vanity_filter #(
     );
 
     gpg_vanity_pattern_matcher #(
-        .DEBUG_ACCEPT_ALL(DEBUG_ACCEPT_ALL)
+        .DEBUG_ACCEPT_ALL(DEBUG_ACCEPT_ALL),
+        .MATCH_SUFFIX(MATCH_SUFFIX),
+        .MATCH_PREFIX(MATCH_PREFIX)
     ) u_matcher (
         .fingerprint(fingerprint),
         .hit(match_hit),

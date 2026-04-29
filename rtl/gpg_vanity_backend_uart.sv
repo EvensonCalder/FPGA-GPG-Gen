@@ -3,7 +3,9 @@
 module gpg_vanity_backend_uart #(
     parameter integer CLK_HZ = 50000000,
     parameter integer BAUD   = 2000000,
-    parameter DEBUG_ACCEPT_ALL = 1'b0
+    parameter DEBUG_ACCEPT_ALL = 1'b0,
+    parameter MATCH_SUFFIX = 1'b1,
+    parameter MATCH_PREFIX = 1'b1
 ) (
     input  logic         clk,
     input  logic         rst_n,
@@ -25,7 +27,9 @@ module gpg_vanity_backend_uart #(
     assign candidate_ready = filter_candidate_ready && hit_ready;
 
     gpg_vanity_filter #(
-        .DEBUG_ACCEPT_ALL(DEBUG_ACCEPT_ALL)
+        .DEBUG_ACCEPT_ALL(DEBUG_ACCEPT_ALL),
+        .MATCH_SUFFIX(MATCH_SUFFIX),
+        .MATCH_PREFIX(MATCH_PREFIX)
     ) u_filter (
         .clk(clk),
         .rst_n(rst_n),

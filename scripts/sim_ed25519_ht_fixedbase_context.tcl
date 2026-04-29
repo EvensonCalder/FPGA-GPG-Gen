@@ -34,7 +34,11 @@ foreach f [glob -nocomplain -directory "$ref_dir/baseP_mult" *.sv *.v] {
 add_files -fileset sim_1 [file normalize "sim/tb_ed25519_ht_fixedbase_context.sv"]
 set_property file_type SystemVerilog [get_files [file normalize "sim/tb_ed25519_ht_fixedbase_context.sv"]]
 set_property top tb_ed25519_ht_fixedbase_context [get_filesets sim_1]
-set table_generic "-generic_top INIT_FILE=[file normalize build/ht_fixedbase_table.mem]"
+set mul_lanes 1
+if {[info exists ::env(MUL_LANES)]} {
+    set mul_lanes $::env(MUL_LANES)
+}
+set table_generic "-generic_top INIT_FILE=[file normalize build/ht_fixedbase_table.mem] -generic_top MUL_LANES=$mul_lanes"
 set_property -name xsim.elaborate.xelab.more_options -value $table_generic -objects [get_filesets sim_1]
 
 launch_simulation -simset sim_1 -mode behavioral

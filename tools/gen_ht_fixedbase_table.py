@@ -44,14 +44,18 @@ def scalar_mul_point(point, n):
 
 
 def main() -> None:
+    window_bits = 9
+    digits = (256 + window_bits - 1) // window_bits
+    table_entries_per_digit = 1 << (window_bits - 1)
+
     bx, by = base_point()
     base = affine_to_ext(bx, by)
     entries = []
-    for pos in range(32):
+    for pos in range(digits):
         radix_point = base
-        for _ in range(8 * pos):
+        for _ in range(window_bits * pos):
             radix_point = ext_double(radix_point)
-        for j in range(8):
+        for j in range(table_entries_per_digit):
             multiple = scalar_mul_point(radix_point, j + 1)
             entries.append(affine_niels(multiple))
 

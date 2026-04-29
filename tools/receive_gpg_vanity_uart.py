@@ -10,6 +10,8 @@ import sys
 import termios
 import time
 
+from openpgp_ed25519 import openpgp_v4_ed25519_secret_key_packet
+
 
 MAGIC = b"GPGV1"
 SEED_LEN = 32
@@ -171,13 +173,33 @@ def parse_frames(buffer):
     return records, bad_crc
 
 
-def write_record(files, class_id, seed, public, sync):
+def write_openpgp_secret_file(out_dir, class_id, seed, public, timestamp, sync):
+    class_name = CLASS_NAMES[class_id]
+    keyid = f"{class_name}_{public.hex()[:16]}_{seed.hex()[:16]}"
+    path = os.path.join(out_dir, f"{keyid}.gpg")
+    if os.path.exists(path) and stat.S_ISLNK(os.lstat(path).st_mode):
+        raise RuntimeError(f"refusing to write through symlink: {path}")
+    packet = openpgp_v4_ed25519_secret_key_packet(seed, public, timestamp)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    fd = os.open(path, flags, 0o600)
+    try:
+        os.write(fd, packet)
+        if sync:
+            os.fsync(fd)
+    finally:
+        os.close(fd)
+    return path
+
+
+def write_record(files, class_id, seed, public, sync, *, gpg_dir=None, timestamp=None):
     line = f"{CLASS_NAMES[class_id]} {seed.hex()} {public.hex()}\n"
     f = files[class_id]
     f.write(line)
     if sync:
         f.flush()
         os.fsync(f.fileno())
+    if gpg_dir is not None:
+        write_openpgp_secret_file(gpg_dir, class_id, seed, public, timestamp, sync)
 
 
 def receive(args):
@@ -188,6 +210,8 @@ def receive(args):
             print(f"warning: mlockall unavailable: {err}", file=sys.stderr)
 
     prepare_output_dir(args.out_dir)
+    if args.gpg_dir:
+        prepare_output_dir(args.gpg_dir)
     files = open_output_files(args.out_dir, args.file_prefix)
     source = None
     total = 0
@@ -222,7 +246,8 @@ def receive(args):
             records, new_bad_crc = parse_frames(buffer)
             bad_crc += new_bad_crc
             for class_id, seed, public in records:
-                write_record(files, class_id, seed, public, not args.no_fsync)
+                write_record(files, class_id, seed, public, not args.no_fsync,
+                             gpg_dir=args.gpg_dir, timestamp=args.timestamp)
                 total += 1
                 if not args.quiet:
                     print(f"accepted class={CLASS_NAMES[class_id]} total={total}", file=sys.stderr, flush=True)
@@ -258,6 +283,9 @@ def main():
     parser.add_argument("--read-size", type=int, default=4096, help="read chunk size")
     parser.add_argument("--report-interval", type=float, default=60.0, help="idle progress interval")
     parser.add_argument("--no-fsync", action="store_true", help="do not fsync after every accepted key")
+    parser.add_argument("--gpg-dir", help="also write each hit as a private OpenPGP .gpg secret-key packet")
+    parser.add_argument("--timestamp", type=lambda x: int(x, 0), default=1700000000,
+                        help="OpenPGP creation timestamp for --gpg-dir output")
     parser.add_argument("--mlock", action="store_true", help="try to lock process memory")
     parser.add_argument("--quiet", action="store_true", help="suppress progress messages")
     parser.add_argument("--input-bin", help="read frames from a binary file instead of UART, for tests")

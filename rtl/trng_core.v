@@ -53,17 +53,13 @@ module trng_core #(
 
     wire can_pack = (!random_valid) || random_ready;
 
-    function [31:0] mix32;
-        input [31:0] x;
-        reg [31:0] y;
-        begin
-            y = x ^ (x >> 16);
-            y = y * 32'h7feb352d;
-            y = y ^ (y >> 15);
-            y = y * 32'h846ca68b;
-            mix32 = y ^ (y >> 16);
-        end
-    endfunction
+    wire [31:0] mix_in = {pair_first, cond_word[31:1]};
+    wire [31:0] mix_x1 = mix_in ^ (mix_in >> 16);
+    (* use_dsp = "no" *) wire [31:0] mix_m1 = mix_x1 * 32'h7feb352d;
+    wire [31:0] mix_x2 = mix_m1 ^ (mix_m1 >> 15);
+    (* use_dsp = "no" *) wire [31:0] mix_m2 = mix_x2 * 32'h846ca68b;
+    wire [31:0] mix32 = mix_m2 ^ (mix_m2 >> 16);
+
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -161,7 +157,7 @@ module trng_core #(
                             cond_word <= {pair_first, cond_word[31:1]};
 
                             if (cond_count == CONDITIONER_BITS - 1) begin
-                                out_word   <= mix32({pair_first, cond_word[31:1]});
+                                out_word   <= mix32;
                                 out_count  <= 2'd0;
                                 out_active <= 1'b1;
                                 cond_count <= 8'd0;

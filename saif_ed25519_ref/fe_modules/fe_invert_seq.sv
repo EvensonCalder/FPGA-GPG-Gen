@@ -3,6 +3,12 @@ module fe_invert (
     input rst,                          // Reset input (active high)
     input start,                        // Start signal
     input signed [319:0] z,             // Input field element
+    input post_mul_start,               // Reuse the internal multiplier when idle
+    input signed [319:0] post_mul_a,
+    input signed [319:0] post_mul_b,
+    output wire post_mul_ready,
+    output reg signed [319:0] post_mul_out,
+    output reg post_mul_done,
     output reg signed [319:0] out,      // Output (modular inverse of z)
     output reg done                     // Done signal to indicate completion
 );
@@ -21,6 +27,9 @@ module fe_invert (
     // Control signals for submodules
     reg sq_start, mul_start;
     reg signed [319:0] sq_in, mul_a, mul_b;
+    reg post_mul_busy;
+
+    assign post_mul_ready = (state == IDLE) && !post_mul_busy;
 
     // Instantiate sequential submodules
     fe_sq sq_unit (
@@ -55,10 +64,14 @@ module fe_invert (
             sq_in <= 0;
             mul_a <= 0;
             mul_b <= 0;
+            post_mul_busy <= 0;
+            post_mul_out <= 0;
+            post_mul_done <= 0;
             sq_start <= 0;
             mul_start <= 0;
             done <= 0;
         end else begin
+            post_mul_done <= 0;
             case (state)
                 IDLE: begin
                     loop_cnt <= 0;
@@ -67,12 +80,23 @@ module fe_invert (
                     t2 <= 0;
                     t3 <= 0;
                     sq_in <= 0;
-                    mul_a <= 0;
-                    mul_b <= 0;
                     sq_start <= 0;
                     mul_start <= 0;
                     done <= 0; 
-                    if (start == 1) begin
+                    if (post_mul_busy) begin
+                        if (mul_done) begin
+                            post_mul_out <= mul_out;
+                            post_mul_done <= 1;
+                            post_mul_busy <= 0;
+                        end
+                        state <= IDLE;
+                    end else if (post_mul_start) begin
+                        mul_a <= post_mul_a;
+                        mul_b <= post_mul_b;
+                        mul_start <= 1;
+                        post_mul_busy <= 1;
+                        state <= IDLE;
+                    end else if (start == 1) begin
                         state <= 0;
                     end else begin
                         state <= IDLE;

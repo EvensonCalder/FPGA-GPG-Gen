@@ -33,6 +33,7 @@ module ge_p3_tobytes(
     wire [319:0] mul_out;     // Multiplier result
     wire done_inv;            // Inversion done flag
     wire mul_done;            // Multiplier done flag
+    wire mul_ready;
     reg is_negative;          // Sign of x-coordinate
     reg bytes_start;
     reg [319:0] bytes_in;
@@ -45,19 +46,14 @@ module ge_p3_tobytes(
         .start(inv_start),
         .clk(clk),
         .rst(rst),
+        .post_mul_start(mul_start),
+        .post_mul_a(mul_in_f),
+        .post_mul_b(mul_in_g),
+        .post_mul_ready(mul_ready),
+        .post_mul_out(mul_out),
+        .post_mul_done(mul_done),
         .done(done_inv),
         .out(recip)
-    );
-
-    // Instantiate single multiplier
-    fe_mul fe_mul_inst (
-        .f(mul_in_f),
-        .g(mul_in_g),
-        .start(mul_start),
-        .clk(clk),
-        .reset(rst),
-        .done(mul_done),
-        .h(mul_out)
     );
 
     fe_tobytes_seq fe_bytes (

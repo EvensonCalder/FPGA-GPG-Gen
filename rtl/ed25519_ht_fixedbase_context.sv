@@ -4,7 +4,9 @@ import ed25519_ht_fe17_pkg::*;
 
 module ed25519_ht_fixedbase_context #(
     parameter string INIT_FILE = "build/ht_fixedbase_table.mem",
-    parameter integer MUL_LANES = 1
+    parameter integer MUL_LANES = 1,
+    parameter integer WINDOW_BITS = 9,
+    parameter integer DIGITS = (256 + WINDOW_BITS - 1) / WINDOW_BITS
 ) (
     input  logic         clk,
     input  logic         rst_n,
@@ -18,40 +20,38 @@ module ed25519_ht_fixedbase_context #(
 );
     localparam fe17_t FE_ZERO = '0;
     localparam fe17_t FE_ONE  = fe17_t'(255'd1);
+    localparam int LAST_DIGIT = DIGITS - 1;
+    localparam int LAST_BITS = 256 - (WINDOW_BITS * LAST_DIGIT);
+    localparam logic [4:0] LAST_DIGIT_IDX = 5'(LAST_DIGIT);
 
     typedef enum logic [4:0] {
         ST_IDLE,
         ST_RECODE_STEP,
-        ST_SELECT_ODD_START,
-        ST_SELECT_ODD_WAIT,
-        ST_MADD_ODD_START,
-        ST_MADD_ODD_WAIT,
-        ST_NEXT_ODD,
-        ST_DBL_START,
-        ST_DBL_WAIT,
-        ST_NEXT_DBL,
-        ST_SELECT_EVEN_START,
-        ST_SELECT_EVEN_WAIT,
-        ST_MADD_EVEN_START,
-        ST_MADD_EVEN_WAIT,
-        ST_NEXT_EVEN,
+        ST_SELECT_START,
+        ST_SELECT_WAIT,
+        ST_MADD_START,
+        ST_MADD_WAIT,
+        ST_NEXT,
         ST_DONE
     } state_t;
 
     state_t state;
-    logic [5:0] idx;
-    logic [5:0] recode_idx;
-    logic signed [8:0] recode_carry;
+    logic [4:0] idx;
+    logic [4:0] recode_idx;
+    logic signed [10:0] recode_carry;
     logic [255:0] scalar_q;
-    logic [1:0] dbl_count;
-    logic signed [7:0] digit [0:63];
-    logic signed [8:0] recode_value;
-    logic signed [8:0] recode_carry_next;
-    logic signed [8:0] recode_digit_next;
+    logic signed [10:0] digit [0:DIGITS-1];
+    logic signed [11:0] recode_value;
+    logic signed [11:0] recode_carry_next;
+    logic signed [11:0] recode_digit_next;
 
     fe17_t h_X, h_Y, h_Z, h_T;
     logic select_start;
     logic select_done;
+    logic select_prefetch;
+    logic prefetch_started;
+    logic [1:0] madd_wait_age;
+    logic [4:0] select_pos;
     fe17_t sel_yplusx;
     fe17_t sel_yminusx;
     fe17_t sel_xy2d;
@@ -62,13 +62,15 @@ module ed25519_ht_fixedbase_context #(
     fe17_t engine_X, engine_Y, engine_Z, engine_T;
 
     ed25519_ht_fixedbase_table #(
-        .INIT_FILE(INIT_FILE)
+        .INIT_FILE(INIT_FILE),
+        .WINDOW_BITS(WINDOW_BITS),
+        .DIGITS(DIGITS)
     ) u_select (
         .clk(clk),
         .rst_n(rst_n),
         .start(select_start),
-        .pos(idx[5:1]),
-        .digit(digit[idx]),
+        .pos(select_pos),
+        .digit(digit[select_pos]),
         .yplusx(sel_yplusx),
         .yminusx(sel_yminusx),
         .xy2d(sel_xy2d),
@@ -87,16 +89,17 @@ module ed25519_ht_fixedbase_context #(
 
     always_comb begin
         select_start = 1'b0;
+        select_prefetch = 1'b0;
         engine_start = 1'b0;
         engine_op_dbl = 1'b0;
         unique case (state)
-            ST_SELECT_ODD_START,
-            ST_SELECT_EVEN_START: select_start = 1'b1;
-            ST_MADD_ODD_START,
-            ST_MADD_EVEN_START: engine_start = 1'b1;
-            ST_DBL_START: begin
-                engine_start = 1'b1;
-                engine_op_dbl = 1'b1;
+            ST_SELECT_START: select_start = 1'b1;
+            ST_MADD_START: engine_start = 1'b1;
+            ST_MADD_WAIT: begin
+                if ((idx != LAST_DIGIT_IDX) && !prefetch_started && (madd_wait_age >= 2'd2)) begin
+                    select_start = 1'b1;
+                    select_prefetch = 1'b1;
+                end
             end
             default: begin
             end
@@ -104,15 +107,19 @@ module ed25519_ht_fixedbase_context #(
     end
 
     always_comb begin
-        recode_value = 9'sd0;
-        recode_carry_next = 9'sd0;
-        recode_digit_next = 9'sd0;
-        if (recode_idx < 6'd63) begin
-            recode_value = 9'({5'd0, scalar_q[4 * recode_idx +: 4]}) + recode_carry;
-            recode_carry_next = (recode_value + 9'sd8) >>> 4;
-            recode_digit_next = recode_value - (recode_carry_next <<< 4);
+        select_pos = select_prefetch ? (idx + 5'd1) : idx;
+    end
+
+    always_comb begin
+        recode_value = 12'sd0;
+        recode_carry_next = 12'sd0;
+        recode_digit_next = 12'sd0;
+        if (recode_idx < LAST_DIGIT_IDX) begin
+            recode_value = 12'({1'b0, scalar_q[WINDOW_BITS * recode_idx +: WINDOW_BITS]}) + 12'(recode_carry);
+            recode_carry_next = (recode_value + (12'sd1 <<< (WINDOW_BITS - 1))) >>> WINDOW_BITS;
+            recode_digit_next = recode_value - (recode_carry_next <<< WINDOW_BITS);
         end else begin
-            recode_value = 9'({5'd0, scalar_q[252 +: 4]}) + recode_carry;
+            recode_value = 12'({{(12-LAST_BITS){1'b0}}, scalar_q[WINDOW_BITS * LAST_DIGIT +: LAST_BITS]}) + 12'(recode_carry);
             recode_digit_next = recode_value;
         end
     end
@@ -120,15 +127,16 @@ module ed25519_ht_fixedbase_context #(
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state <= ST_IDLE;
-            idx <= 6'd0;
-            recode_idx <= 6'd0;
-            recode_carry <= 9'sd0;
+            idx <= 5'd0;
+            recode_idx <= 5'd0;
+            recode_carry <= 11'sd0;
             scalar_q <= 256'd0;
-            dbl_count <= 2'd0;
+            prefetch_started <= 1'b0;
+            madd_wait_age <= 2'd0;
             h_X <= FE_ZERO; h_Y <= FE_ONE; h_Z <= FE_ONE; h_T <= FE_ZERO;
             r_X <= FE_ZERO; r_Y <= FE_ZERO; r_Z <= FE_ZERO; r_T <= FE_ZERO;
-            for (int i = 0; i < 64; i++)
-                digit[i] <= 8'sd0;
+            for (int i = 0; i < DIGITS; i++)
+                digit[i] <= 11'sd0;
             done <= 1'b0;
         end else begin
             done <= 1'b0;
@@ -140,71 +148,53 @@ module ed25519_ht_fixedbase_context #(
                         h_Z <= FE_ONE;
                         h_T <= FE_ZERO;
                         scalar_q <= scalar;
-                        recode_idx <= 6'd0;
-                        recode_carry <= 9'sd0;
+                        recode_idx <= 5'd0;
+                        recode_carry <= 11'sd0;
+                        prefetch_started <= 1'b0;
+                        madd_wait_age <= 2'd0;
                         state <= ST_RECODE_STEP;
                     end
                 end
                 ST_RECODE_STEP: begin
-                    if (recode_idx < 6'd63) begin
-                        digit[recode_idx] <= recode_digit_next[7:0];
-                        recode_carry <= recode_carry_next;
-                        recode_idx <= recode_idx + 6'd1;
+                    if (recode_idx < LAST_DIGIT_IDX) begin
+                        digit[recode_idx] <= recode_digit_next[10:0];
+                        recode_carry <= recode_carry_next[10:0];
+                        recode_idx <= recode_idx + 5'd1;
                     end else begin
-                        digit[63] <= recode_value[7:0];
-                        idx <= 6'd1;
-                        state <= ST_SELECT_ODD_START;
+                        digit[LAST_DIGIT] <= recode_digit_next[10:0];
+                        idx <= 5'd0;
+                        state <= ST_SELECT_START;
                     end
                 end
-                ST_SELECT_ODD_START: state <= ST_SELECT_ODD_WAIT;
-                ST_SELECT_ODD_WAIT: if (select_done) state <= ST_MADD_ODD_START;
-                ST_MADD_ODD_START: state <= ST_MADD_ODD_WAIT;
-                ST_MADD_ODD_WAIT: begin
+                ST_SELECT_START: state <= ST_SELECT_WAIT;
+                ST_SELECT_WAIT: if (select_done) state <= ST_MADD_START;
+                ST_MADD_START: begin
+                    madd_wait_age <= 2'd0;
+                    state <= ST_MADD_WAIT;
+                end
+                ST_MADD_WAIT: begin
+                    if (madd_wait_age != 2'd3)
+                        madd_wait_age <= madd_wait_age + 2'd1;
+                    if (select_prefetch)
+                        prefetch_started <= 1'b1;
                     if (engine_done) begin
                         h_X <= engine_X; h_Y <= engine_Y; h_Z <= engine_Z; h_T <= engine_T;
-                        state <= ST_NEXT_ODD;
+                        if (idx == LAST_DIGIT_IDX) begin
+                            state <= ST_DONE;
+                        end else begin
+                            idx <= idx + 5'd1;
+                            prefetch_started <= 1'b0;
+                            madd_wait_age <= 2'd0;
+                            state <= prefetch_started ? ST_MADD_START : ST_SELECT_START;
+                        end
                     end
                 end
-                ST_NEXT_ODD: begin
-                    if (idx == 6'd63) begin
-                        dbl_count <= 2'd0;
-                        state <= ST_DBL_START;
-                    end else begin
-                        idx <= idx + 6'd2;
-                        state <= ST_SELECT_ODD_START;
-                    end
-                end
-                ST_DBL_START: state <= ST_DBL_WAIT;
-                ST_DBL_WAIT: begin
-                    if (engine_done) begin
-                        h_X <= engine_X; h_Y <= engine_Y; h_Z <= engine_Z; h_T <= engine_T;
-                        state <= ST_NEXT_DBL;
-                    end
-                end
-                ST_NEXT_DBL: begin
-                    if (dbl_count == 2'd3) begin
-                        idx <= 6'd0;
-                        state <= ST_SELECT_EVEN_START;
-                    end else begin
-                        dbl_count <= dbl_count + 2'd1;
-                        state <= ST_DBL_START;
-                    end
-                end
-                ST_SELECT_EVEN_START: state <= ST_SELECT_EVEN_WAIT;
-                ST_SELECT_EVEN_WAIT: if (select_done) state <= ST_MADD_EVEN_START;
-                ST_MADD_EVEN_START: state <= ST_MADD_EVEN_WAIT;
-                ST_MADD_EVEN_WAIT: begin
-                    if (engine_done) begin
-                        h_X <= engine_X; h_Y <= engine_Y; h_Z <= engine_Z; h_T <= engine_T;
-                        state <= ST_NEXT_EVEN;
-                    end
-                end
-                ST_NEXT_EVEN: begin
-                    if (idx == 6'd62) begin
+                ST_NEXT: begin
+                    if (idx == LAST_DIGIT_IDX) begin
                         state <= ST_DONE;
                     end else begin
-                        idx <= idx + 6'd2;
-                        state <= ST_SELECT_EVEN_START;
+                        idx <= idx + 5'd1;
+                        state <= ST_SELECT_START;
                     end
                 end
                 ST_DONE: begin

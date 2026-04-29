@@ -2,7 +2,10 @@
 
 module ed25519_ht_keygen_stream_impl_top #(
     parameter string INIT_FILE = "build/ht_fixedbase_table.mem",
-    parameter integer MUL_LANES = 1
+    parameter integer MUL_LANES = 1,
+    parameter integer LANES = 2,
+    parameter bit BATCH_COMPRESS = 1'b0,
+    parameter integer BATCH_SIZE = 8
 ) (
     input  logic        clk,
     input  logic        rst_n,
@@ -39,7 +42,10 @@ module ed25519_ht_keygen_stream_impl_top #(
 
     ed25519_ht_keygen_stream #(
         .INIT_FILE(INIT_FILE),
-        .MUL_LANES(MUL_LANES)
+        .LANES(LANES),
+        .MUL_LANES(MUL_LANES),
+        .BATCH_COMPRESS(BATCH_COMPRESS),
+        .BATCH_SIZE(BATCH_SIZE)
     ) u_stream (
         .clk(clk),
         .rst_n(rst_n),

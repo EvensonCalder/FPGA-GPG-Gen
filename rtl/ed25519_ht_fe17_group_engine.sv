@@ -62,13 +62,18 @@ module ed25519_ht_fe17_group_engine #(
 
     state_t state;
     logic [1:0] sq_idx;
+    logic madd_ab_done;
+    logic madd_xy_done;
 
     fe17_t yplusx;
     fe17_t yminusx;
+    fe17_t q_yplusx_reg;
+    fe17_t q_yminusx_reg;
+    fe17_t q_xy2d_reg;
     fe17_t a_reg, b_reg, c_reg, d_reg;
     fe17_t e_reg, f_reg, g_reg, h_reg;
-    fe17_t xx, yy, zz, xy2;
-    fe17_t xy_minus_xx, zz2_reg;
+    fe17_t xx, yy, zz, tz;
+    fe17_t zz2_reg;
 
     logic mul0_valid, mul1_valid, sq_valid;
     logic mul0_done, mul1_done, sq_done;
@@ -113,10 +118,17 @@ module ed25519_ht_fe17_group_engine #(
         end
     endgenerate
 
-    ed25519_ht_fe17_square_pipe u_square (
-        .clk(clk), .rst_n(rst_n), .in_valid(sq_valid),
-        .a(sq_a), .out_valid(sq_done), .out(sq_y)
-    );
+    generate
+        if (MUL_LANES < 2) begin : gen_square
+            ed25519_ht_fe17_square_pipe u_square (
+                .clk(clk), .rst_n(rst_n), .in_valid(sq_valid),
+                .a(sq_a), .out_valid(sq_done), .out(sq_y)
+            );
+        end else begin : gen_no_square
+            assign sq_done = 1'b0;
+            assign sq_y = '0;
+        end
+    endgenerate
 
     always_comb begin
         mul0_valid = 1'b0;
@@ -128,22 +140,16 @@ module ed25519_ht_fe17_group_engine #(
 
         unique case (state)
             ST_MADD_MUL_B_START: begin
-                mul0_valid = 1'b1; mul0_a = yplusx;  mul0_b = q_yplusx;
+                mul0_valid = 1'b1; mul0_a = yplusx;  mul0_b = q_yplusx_reg;
                 if (MUL_LANES >= 2) begin
-                    mul1_valid = 1'b1; mul1_a = yminusx; mul1_b = q_yminusx;
+                    mul1_valid = 1'b1; mul1_a = yminusx; mul1_b = q_yminusx_reg;
                 end
             end
             ST_MADD_MUL_A_START: begin
-                mul0_valid = 1'b1; mul0_a = yminusx; mul0_b = q_yminusx;
+                mul0_valid = 1'b1; mul0_a = yminusx; mul0_b = q_yminusx_reg;
             end
             ST_MADD_MUL_C_START: begin
-                mul0_valid = 1'b1; mul0_a = p_T; mul0_b = q_xy2d;
-                if (MUL_LANES >= 2) begin
-                    mul1_valid = 1'b1; mul1_a = p_Z; mul1_b = fe17_t'(255'd2);
-                end
-            end
-            ST_MADD_MUL_D_START: begin
-                mul0_valid = 1'b1; mul0_a = p_Z; mul0_b = fe17_t'(255'd2);
+                mul0_valid = 1'b1; mul0_a = p_T; mul0_b = q_xy2d_reg;
             end
             ST_MADD_MUL_X_START,
             ST_DBL_MUL_X_START: begin
@@ -175,13 +181,29 @@ module ed25519_ht_fe17_group_engine #(
                 mul0_valid = 1'b1; mul0_a = e_reg; mul0_b = g_reg;
             end
             ST_DBL_SQ_START: begin
-                sq_valid = 1'b1;
-                unique case (sq_idx)
-                    2'd0: sq_a = p_X;
-                    2'd1: sq_a = p_Y;
-                    2'd2: sq_a = p_Z;
-                    default: sq_a = fe_add(p_X, p_Y);
-                endcase
+                if (MUL_LANES >= 2) begin
+                    mul0_valid = 1'b1;
+                    mul1_valid = 1'b1;
+                    if (sq_idx == 2'd0) begin
+                        mul0_a = p_X; mul0_b = p_X;
+                        mul1_a = p_Y; mul1_b = p_Y;
+                    end else begin
+                        mul0_a = p_Z; mul0_b = p_Z;
+                        mul1_a = p_T; mul1_b = p_Z;
+                    end
+                end else begin
+                    sq_valid = 1'b1;
+                    unique case (sq_idx)
+                        2'd0: sq_a = p_X;
+                        2'd1: sq_a = p_Y;
+                        default: sq_a = p_Z;
+                    endcase
+                    if (sq_idx == 2'd0) begin
+                        mul0_valid = 1'b1;
+                        mul0_a = p_T;
+                        mul0_b = p_Z;
+                    end
+                end
             end
             default: begin
             end
@@ -192,12 +214,15 @@ module ed25519_ht_fe17_group_engine #(
         if (!rst_n) begin
             state <= ST_IDLE;
             sq_idx <= 2'd0;
+            madd_ab_done <= 1'b0;
+            madd_xy_done <= 1'b0;
             done <= 1'b0;
             yplusx <= '0; yminusx <= '0;
+            q_yplusx_reg <= '0; q_yminusx_reg <= '0; q_xy2d_reg <= '0;
             a_reg <= '0; b_reg <= '0; c_reg <= '0; d_reg <= '0;
             e_reg <= '0; f_reg <= '0; g_reg <= '0; h_reg <= '0;
-            xx <= '0; yy <= '0; zz <= '0; xy2 <= '0;
-            xy_minus_xx <= '0; zz2_reg <= '0;
+            xx <= '0; yy <= '0; zz <= '0; tz <= '0;
+            zz2_reg <= '0;
             r_X <= '0; r_Y <= '0; r_Z <= '0; r_T <= '0;
         end else begin
             done <= 1'b0;
@@ -206,10 +231,13 @@ module ed25519_ht_fe17_group_engine #(
                     if (start) begin
                         if (op_dbl) begin
                             sq_idx <= 2'd0;
-                            xx <= '0; yy <= '0; zz <= '0; xy2 <= '0;
-                            xy_minus_xx <= '0; zz2_reg <= '0;
+                            xx <= '0; yy <= '0; zz <= '0; tz <= '0;
+                            zz2_reg <= '0;
                             state <= ST_DBL_SQ_START;
                         end else begin
+                            q_yplusx_reg <= q_yplusx;
+                            q_yminusx_reg <= q_yminusx;
+                            q_xy2d_reg <= q_xy2d;
                             state <= ST_MADD_INIT;
                         end
                     end
@@ -218,9 +246,16 @@ module ed25519_ht_fe17_group_engine #(
                 ST_MADD_INIT: begin
                     yplusx <= fe_add(p_Y, p_X);
                     yminusx <= fe_sub(p_Y, p_X);
+                    d_reg <= fe_add(p_Z, p_Z);
                     state <= ST_MADD_MUL_B_START;
                 end
-                ST_MADD_MUL_B_START: state <= ST_MADD_MUL_B_WAIT;
+                ST_MADD_MUL_B_START: begin
+                    madd_ab_done <= 1'b0;
+                    if (MUL_LANES >= 2)
+                        state <= ST_MADD_MUL_C_START;
+                    else
+                        state <= ST_MADD_MUL_B_WAIT;
+                end
                 ST_MADD_MUL_B_WAIT: begin
                     if (mul0_done) begin
                         b_reg <= mul0_y;
@@ -241,21 +276,25 @@ module ed25519_ht_fe17_group_engine #(
                 end
                 ST_MADD_MUL_C_START: state <= ST_MADD_MUL_C_WAIT;
                 ST_MADD_MUL_C_WAIT: begin
-                    if (mul0_done) begin
-                        c_reg <= mul0_y;
-                        if (MUL_LANES >= 2 && mul1_done) begin
-                            d_reg <= mul1_y;
-                            state <= ST_MADD_EFGH;
+                    if (MUL_LANES >= 2) begin
+                        if (!madd_ab_done) begin
+                            if (mul0_done && mul1_done) begin
+                                b_reg <= mul0_y;
+                                a_reg <= mul1_y;
+                                madd_ab_done <= 1'b1;
+                            end
                         end else begin
-                            state <= ST_MADD_MUL_D_START;
+                            if (mul0_done) begin
+                                c_reg <= mul0_y;
+                                madd_ab_done <= 1'b0;
+                                state <= ST_MADD_EFGH;
+                            end
                         end
-                    end
-                end
-                ST_MADD_MUL_D_START: state <= ST_MADD_MUL_D_WAIT;
-                ST_MADD_MUL_D_WAIT: begin
-                    if (mul0_done) begin
-                        d_reg <= mul0_y;
-                        state <= ST_MADD_EFGH;
+                    end else begin
+                        if (mul0_done) begin
+                            c_reg <= mul0_y;
+                            state <= ST_MADD_EFGH;
+                        end
                     end
                 end
                 ST_MADD_EFGH: begin
@@ -265,7 +304,13 @@ module ed25519_ht_fe17_group_engine #(
                     g_reg <= fe_add(d_reg, c_reg);
                     state <= ST_MADD_MUL_X_START;
                 end
-                ST_MADD_MUL_X_START: state <= ST_MADD_MUL_X_WAIT;
+                ST_MADD_MUL_X_START: begin
+                    madd_xy_done <= 1'b0;
+                    if (MUL_LANES >= 2)
+                        state <= ST_MADD_MUL_Z_START;
+                    else
+                        state <= ST_MADD_MUL_X_WAIT;
+                end
                 ST_MADD_MUL_X_WAIT: begin
                     if (mul0_done) begin
                         r_X <= mul0_y;
@@ -286,12 +331,24 @@ module ed25519_ht_fe17_group_engine #(
                 end
                 ST_MADD_MUL_Z_START: state <= ST_MADD_MUL_Z_WAIT;
                 ST_MADD_MUL_Z_WAIT: begin
-                    if (mul0_done) begin
-                        r_Z <= mul0_y;
-                        if (MUL_LANES >= 2 && mul1_done) begin
-                            r_T <= mul1_y;
-                            state <= ST_DONE;
+                    if (MUL_LANES >= 2) begin
+                        if (!madd_xy_done) begin
+                            if (mul0_done && mul1_done) begin
+                                r_X <= mul0_y;
+                                r_Y <= mul1_y;
+                                madd_xy_done <= 1'b1;
+                            end
                         end else begin
+                            if (mul0_done && mul1_done) begin
+                                r_Z <= mul0_y;
+                                r_T <= mul1_y;
+                                madd_xy_done <= 1'b0;
+                                state <= ST_DONE;
+                            end
+                        end
+                    end else begin
+                        if (mul0_done) begin
+                            r_Z <= mul0_y;
                             state <= ST_MADD_MUL_T_START;
                         end
                     end
@@ -306,34 +363,45 @@ module ed25519_ht_fe17_group_engine #(
 
                 ST_DBL_SQ_START: state <= ST_DBL_SQ_WAIT;
                 ST_DBL_SQ_WAIT: begin
-                    if (sq_done) begin
-                        if (sq_idx == 2'd0) begin
-                            xx <= sq_y;
-                            sq_idx <= 2'd1;
-                            state <= ST_DBL_SQ_START;
-                        end else if (sq_idx == 2'd1) begin
-                            yy <= sq_y;
-                            sq_idx <= 2'd2;
-                            state <= ST_DBL_SQ_START;
-                        end else if (sq_idx == 2'd2) begin
-                            zz <= sq_y;
-                            sq_idx <= 2'd3;
-                            state <= ST_DBL_SQ_START;
-                        end else begin
-                            xy2 <= sq_y;
-                            state <= ST_DBL_EGH;
+                    if (MUL_LANES >= 2) begin
+                        if (mul0_done && mul1_done) begin
+                            if (sq_idx == 2'd0) begin
+                                xx <= mul0_y;
+                                yy <= mul1_y;
+                                sq_idx <= 2'd1;
+                                state <= ST_DBL_SQ_START;
+                            end else begin
+                                zz <= mul0_y;
+                                tz <= mul1_y;
+                                state <= ST_DBL_EGH;
+                            end
+                        end
+                    end else begin
+                        if (sq_done && (sq_idx != 2'd0 || mul0_done)) begin
+                            if (sq_idx == 2'd0) begin
+                                xx <= sq_y;
+                                tz <= mul0_y;
+                                sq_idx <= 2'd1;
+                                state <= ST_DBL_SQ_START;
+                            end else if (sq_idx == 2'd1) begin
+                                yy <= sq_y;
+                                sq_idx <= 2'd2;
+                                state <= ST_DBL_SQ_START;
+                            end else begin
+                                zz <= sq_y;
+                                state <= ST_DBL_EGH;
+                            end
                         end
                     end
                 end
                 ST_DBL_EGH: begin
-                    xy_minus_xx <= fe_sub(xy2, xx);
                     zz2_reg <= fe_add(zz, zz);
                     g_reg <= fe_add(yy, xx);
                     h_reg <= fe_sub(yy, xx);
                     state <= ST_DBL_EF;
                 end
                 ST_DBL_EF: begin
-                    e_reg <= fe_sub(xy_minus_xx, yy);
+                    e_reg <= fe_add(tz, tz);
                     f_reg <= fe_sub(zz2_reg, h_reg);
                     state <= ST_DBL_MUL_X_START;
                 end

@@ -1,7 +1,9 @@
 `timescale 1ns / 1ps
 
 module gpg_vanity_pattern_matcher #(
-    parameter DEBUG_ACCEPT_ALL = 1'b0
+    parameter DEBUG_ACCEPT_ALL = 1'b0,
+    parameter MATCH_SUFFIX = 1'b1,
+    parameter MATCH_PREFIX = 1'b1
 ) (
     input  wire [159:0] fingerprint,
     output reg          hit,
@@ -32,10 +34,10 @@ module gpg_vanity_pattern_matcher #(
         if (DEBUG_ACCEPT_ALL) begin
             hit = 1'b1;
             class_id = 4'h0;
-        end else if (suffix_same8) begin
+        end else if (MATCH_SUFFIX && suffix_same8) begin
             hit = 1'b1;
             class_id = 4'h0;
-        end else if (prefix_same8) begin
+        end else if (MATCH_PREFIX && prefix_same8) begin
             hit = 1'b1;
             class_id = 4'h1;
         end else begin

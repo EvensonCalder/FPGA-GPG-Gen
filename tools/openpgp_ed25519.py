@@ -41,6 +41,36 @@ def openpgp_v4_ed25519_public_body(public_key, timestamp):
     )
 
 
+def openpgp_new_packet(tag, body):
+    if not 0 <= tag <= 63:
+        raise ValueError("packet tag must fit in new-format header")
+    if len(body) < 192:
+        length = bytes([len(body)])
+    elif len(body) < 8384:
+        n = len(body) - 192
+        length = bytes([(n >> 8) + 192, n & 0xff])
+    else:
+        length = b"\xff" + len(body).to_bytes(4, "big")
+    return bytes([0xc0 | tag]) + length + body
+
+
+def openpgp_v4_ed25519_public_key_packet(public_key, timestamp):
+    return openpgp_new_packet(6, openpgp_v4_ed25519_public_body(public_key, timestamp))
+
+
+def openpgp_v4_ed25519_secret_body(seed, public_key, timestamp):
+    if len(seed) != 32:
+        raise ValueError("Ed25519 seed must be 32 bytes")
+    public_body = openpgp_v4_ed25519_public_body(public_key, timestamp)
+    secret_mpi = mpi_from_opaque(seed)
+    checksum = (sum(secret_mpi) & 0xffff).to_bytes(2, "big")
+    return public_body + b"\x00" + secret_mpi + checksum
+
+
+def openpgp_v4_ed25519_secret_key_packet(seed, public_key, timestamp):
+    return openpgp_new_packet(5, openpgp_v4_ed25519_secret_body(seed, public_key, timestamp))
+
+
 def openpgp_v4_fingerprint_from_body(body):
     if len(body) > 0xffff:
         raise ValueError("v4 public key packet body is too large")

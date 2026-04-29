@@ -3,7 +3,8 @@
 import ed25519_ht_fe17_pkg::*;
 
 module tb_ed25519_ht_fixedbase_context #(
-    parameter string INIT_FILE = "build/ht_fixedbase_table.mem"
+    parameter string INIT_FILE = "build/ht_fixedbase_table.mem",
+    parameter integer MUL_LANES = 1
 );
     logic clk = 1'b0;
     logic rst_n = 1'b0;
@@ -26,7 +27,8 @@ module tb_ed25519_ht_fixedbase_context #(
     );
 
     ed25519_ht_fixedbase_context #(
-        .INIT_FILE(INIT_FILE)
+        .INIT_FILE(INIT_FILE),
+        .MUL_LANES(MUL_LANES)
     ) u_ht (
         .clk(clk), .rst_n(rst_n), .start(start_ht), .scalar(scalar),
         .r_X(ht_X), .r_Y(ht_Y), .r_Z(ht_Z), .r_T(ht_T), .done(done_ht)
