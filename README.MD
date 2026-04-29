@@ -1,344 +1,81 @@
-# GPG Vanity HT Runner
+# FPGA-GPG-Gen
 
-## Current Status
+Hardware-accelerated OpenPGP vanity Ed25519 key generator on Xilinx Kintex-7.
 
-- FPGA image has been programmed to board Quad SPI Flash.
-- Flash boot was verified with Vivado: `DONE_PIN 1`, `EOS 1`.
-- Host auto-start is not configured. Start the receiver manually when needed.
-- Final stable performance is about `9047 keys/s`.
+An FPGA generates Ed25519 keypairs at high speed, computes OpenPGP fingerprints on-chip, and matches a configurable vanity pattern. Matching candidates are streamed over UART to a host that writes secret keys as `.gpg` files.
 
-## Normal Use
+## Architecture
 
-1. Power on the FPGA board.
-2. Start the receiver on the host:
-
-```sh
-tools/run_gpg_vanity_receiver.sh
+```
+FPGA                                    Host
+────                                    ────
+TRNG → SHA-512 → Ed25519 scalar-mul     UART ← receive_gpg_vanity_uart.py
+  ring-oscillator entropy       │              │
+  Von-Neumann debias            │         parse GPGV1 frames
+  online health tests           │         CRC32 verify
+                                │              │
+        OpenPGP fingerprint      │         class_suffix.txt
+        pattern match            │         class_prefix.txt
+              │                  │              │
+         hit? → GPGV1 frame ─────┘         suffix_xxxx.gpg
+                seed + public              prefix_xxxx.gpg
+                CRC32
 ```
 
-Default receiver port:
+- **TRNG**: 32 ring-oscillator entropy sources per core, independent sampling, health-monitored
+- **SHA-512**: seed expansion to secret scalar
+- **Ed25519 scalar multiplication**: high-throughput radix-17 fixed-base ladder with w=9 precomputed table
+- **Fingerprint**: on-chip OpenPGP v4 Ed25519 hashing
+- **Matcher**: configurable suffix/prefix pattern match on fingerprint hex
+- **UART frame**: binary `GPGV1 || class_id || seed || public || crc32` at 2 Mbps
 
-```text
-/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0
+## Performance
+
+| Metric | Value |
+|--------|-------|
+| Clock | 64.7 MHz |
+| Keygen latency | 7152 cycles |
+| Throughput | ~9047 keys/s |
+| Slice | 24161 / 25350 (95.3%) |
+| DSP | 473 / 600 (78.8%) |
+| BRAM | 192 / 325 (59.1%) |
+
+Expected time to hit a "last 8 hex all equal" suffix: ~8.2 hours.
+
+## Directory Layout
+
+```
+rtl/            FPGA source (SystemVerilog)
+sim/            Testbench source and vector data
+scripts/        Vivado Tcl build, simulation, and programming scripts
+tools/           Host-side Python tools (receiver, keygen, verification)
+docs/           Design documents and operation guides
+saif_ed25519_ref/  Reference Ed25519 implementation (third-party, with permission)
 ```
 
-UART settings:
+## Quick Start
 
-```text
-baud = 2000000
-flow control = off
-```
-
-Output directories:
-
-```text
-build/gpg_vanity_real_hits/
-build/gpg_vanity_real_hits_gpg/
-```
-
-Text hit logs are written under `build/gpg_vanity_real_hits/`.
-Per-hit `.gpg` secret-key packets are written under `build/gpg_vanity_real_hits_gpg/`.
-
-## Use A Generated `.gpg` Key File
-
-Each `.gpg` file under this directory is an OpenPGP secret-key packet generated from one FPGA hit:
-
-```text
-build/gpg_vanity_real_hits_gpg/
-```
-
-List generated key files:
-
-```sh
-ls -l build/gpg_vanity_real_hits_gpg/*.gpg
-```
-
-Inspect a key packet without importing it:
-
-```sh
-gpg --list-packets build/gpg_vanity_real_hits_gpg/<file>.gpg
-```
-
-Import one generated secret key into your local GnuPG keyring:
-
-```sh
-gpg --import build/gpg_vanity_real_hits_gpg/<file>.gpg
-```
-
-List imported secret keys:
-
-```sh
-gpg --list-secret-keys --keyid-format long
-```
-
-GnuPG may print a warning like this:
-
-```text
-gpg: no user ID
-```
-
-That is expected for the current output. The FPGA/receiver writes a bare OpenPGP secret-key packet, not a full certificate with user IDs, self-signatures, preferences, or expiration metadata.
-
-To use it as a normal GPG identity, add a user ID after import:
-
-```sh
-gpg --quick-add-uid <FINGERPRINT_OR_KEYID> "Your Name <you@example.com>"
-```
-
-Then optionally add/update preferences, expiration, or trust using normal GnuPG commands.
-
-Export the public key after adding a user ID:
-
-```sh
-gpg --armor --export <FINGERPRINT_OR_KEYID> > vanity_public.asc
-```
-
-Export the secret key for backup:
-
-```sh
-gpg --armor --export-secret-keys <FINGERPRINT_OR_KEYID> > vanity_secret.asc
-chmod 600 vanity_secret.asc
-```
-
-Important handling notes:
-
-- Treat every `.gpg` file as private key material.
-- Keep `build/gpg_vanity_real_hits_gpg/` private; receiver-created directories use restrictive permissions.
-- Do not upload `.gpg`, seed logs, or exported secret keys.
-- If you only want to validate hits without importing, use `gpg --list-packets` or the verification tools instead.
-
-Runtime log:
-
-```text
-build/gpg_vanity_receiver.log
-```
-
-The receiver prints an idle status line every 60 seconds, for example:
-
-```text
-rate hits/s=0.000 keys/s=N/A accepted=0 bad_crc=0
-```
-
-That means the receiver is alive and listening; hits are rare, so `accepted=0` is normal for long periods.
-
-Watch the log live:
-
-```sh
-tail -f build/gpg_vanity_receiver.log
-```
-
-Check whether the receiver process is running:
-
-```sh
-pgrep -af receive_gpg_vanity_uart.py
-```
-
-Use a different log file:
-
-```sh
-GPG_VANITY_LOG_FILE=/path/to/receiver.log tools/run_gpg_vanity_receiver.sh
-```
-
-## Select The UART Port
-
-List stable serial device names:
-
-```sh
-ls -l /dev/serial/by-id/
-```
-
-Current known devices on this host included:
-
-```text
-usb-1a86_USB_Serial-if00-port0 -> ../../ttyUSB1
-usb-Digilent_Digilent_USB_Device_210251A08870-if00-port0 -> ../../ttyUSB0
-usb-Milsky_LL_Dongle_A694CFC453E2-if00 -> ../../ttyACM0
-```
-
-The FPGA UART receiver is expected to be the CH340/1a86 device:
-
-```text
-/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0
-```
-
-If the listen device changes, override it when starting the receiver:
-
-```sh
-GPG_VANITY_UART_PORT=/dev/serial/by-id/<your-device> tools/run_gpg_vanity_receiver.sh
-```
-
-You can also use a direct tty path if needed:
-
-```sh
-GPG_VANITY_UART_PORT=/dev/ttyUSB1 tools/run_gpg_vanity_receiver.sh
-```
-
-Override output directories if needed:
-
-```sh
-GPG_VANITY_OUT_DIR=/path/to/hit_logs \
-GPG_VANITY_GPG_DIR=/path/to/gpg_files \
-tools/run_gpg_vanity_receiver.sh
-```
-
-Override baud rate if the FPGA UART setting changes:
-
-```sh
-GPG_VANITY_BAUD=2000000 tools/run_gpg_vanity_receiver.sh
-```
-
-## Final FPGA Artifacts
-
-```text
-build/vivado_gpg_vanity_ht_search_synth/gpg_vanity_ht_search_top.bit
-build/vivado_gpg_vanity_ht_search_synth/gpg_vanity_ht_search_top_flash.mcs
-build/vivado_gpg_vanity_ht_search_synth/gpg_vanity_ht_search_top_flash.bin
-build/vivado_gpg_vanity_ht_search_synth/timing_summary_routed.rpt
-build/vivado_gpg_vanity_ht_search_synth/utilization_routed.rpt
-```
-
-## Rebuild Bitstream
+Rebuild the bitstream:
 
 ```sh
 vivado -mode batch -source scripts/impl_gpg_vanity_ht_search.tcl
 ```
 
-Final default build configuration:
-
-```text
-LANES=2
-MUL_LANES=1
-TRNG_CORES=2
-USE_PLL=1
-system clock = 64.705882 MHz
-```
-
-## Generate Flash Image
+Run the receiver:
 
 ```sh
-vivado -mode batch -source scripts/write_gpg_vanity_ht_search_cfgmem.tcl
+tools/run_gpg_vanity_receiver.sh
 ```
 
-Flash configuration:
+See `docs/RUN_GPG_VANITY_HT.md` for programming, flash setup, and full operation commands.
 
-```text
-cfgmem part = mx25l25673g-spi-x1_x2_x4
-interface = SPIx4
-size = 32M
-load address = 0x00000000
-compression = disabled
-```
+## Requirements
 
-## Program FPGA Over JTAG
+- Vivado 2025.2
+- Kintex-7 XC7K160T (-2 speed grade)
+- Python 3 (host receiver)
+- GnuPG (optional, for key import)
 
-This loads the bitstream into FPGA SRAM only. It does not persist after power-off.
+## License
 
-```sh
-vivado -mode batch -source scripts/program_gpg_vanity_ht_search.tcl
-```
-
-## Program Board Flash
-
-This erases, programs, and verifies the board Quad SPI Flash.
-
-```sh
-vivado -mode batch -source scripts/program_gpg_vanity_ht_search_flash.tcl
-```
-
-The script first loads Vivado's cfgmem bridge bitstream, then programs:
-
-```text
-build/vivado_gpg_vanity_ht_search_synth/gpg_vanity_ht_search_top_flash.mcs
-```
-
-Expected success messages include:
-
-```text
-Erase Operation successful.
-Program/Verify Operation successful.
-Flash programming completed successfully
-```
-
-## Verify Flash Boot
-
-```sh
-vivado -mode batch -source scripts/boot_gpg_vanity_ht_search_from_flash.tcl
-```
-
-Expected output includes:
-
-```text
-DONE_PIN 1
-EOS 1
-```
-
-## Check Flash Part Against Vivado
-
-```sh
-vivado -mode batch -source scripts/check_gpg_vanity_ht_flash_part.tcl
-```
-
-Expected output includes:
-
-```text
-CFG_PART_OK mx25l25673g-spi-x1_x2_x4
-FPGA_PART_OK xc7k160t_0 PART=xc7k160t
-HW_CFGMEM_OK cfgmem_0
-```
-
-## Functional Checks
-
-Keygen stream simulation:
-
-```sh
-env LANES=2 MUL_LANES=1 NATIVE_COMPRESS=0 BATCH_COMPRESS=0 MULTI_CONTEXT_SCALAR=0 BURST_COUNT=16 vivado -mode batch -source scripts/sim_ed25519_ht_keygen_stream.tcl
-```
-
-Top-level UART smoke simulation:
-
-```sh
-vivado -mode batch -source scripts/sim_gpg_vanity_ht_search_top.tcl
-```
-
-Receiver self-test:
-
-```sh
-python3 tools/selftest_gpg_vanity_uart.py
-```
-
-## Final Signoff Numbers
-
-```text
-WNS = +0.562 ns
-WHS = +0.028 ns
-TNS = 0.000
-THS = 0.000
-failed setup endpoints = 0
-failed hold endpoints = 0
-```
-
-Resource use:
-
-```text
-LUT = 73567 / 101400 = 72.55%
-FF = 65072 / 202800 = 32.09%
-BRAM tile = 192 / 325 = 59.08%
-DSP = 473 / 600 = 78.83%
-Slice = 24161 / 25350 = 95.31%
-```
-
-Throughput:
-
-```text
-cycles/key = 7152
-keys/s = 9047
-expected suffix hit time = 8.24 h
-```
-
-## Notes
-
-- The FPGA hot path performs seed generation, Ed25519 public key generation, OpenPGP fingerprinting, and suffix matching.
-- The host only receives hits and writes records/files.
-- Current final bitstream matches suffix pattern: last 8 fingerprint hex characters all equal.
-- Report: `docs/GPG_VANITY_HT_OPERATION_REPORT.md`
-- Hardware facts: `PROJECT_SPEC.md`
+MIT — see [LICENSE](LICENSE).
