@@ -154,10 +154,10 @@ module gpg_vanity_backend_uart #(
                 7'd35:   hb_frame_byte = stall_output_count[23:16];
                 7'd36:   hb_frame_byte = stall_output_count[15:8];
                 7'd37:   hb_frame_byte = stall_output_count[7:0];
-                7'd70:   hb_frame_byte = hb_crc[7:0];
-                7'd71:   hb_frame_byte = hb_crc[15:8];
-                7'd72:   hb_frame_byte = hb_crc[23:16];
-                7'd73:   hb_frame_byte = hb_crc[31:24];
+                7'd70:   hb_frame_byte = ~hb_crc[7:0];
+                7'd71:   hb_frame_byte = ~hb_crc[15:8];
+                7'd72:   hb_frame_byte = ~hb_crc[23:16];
+                7'd73:   hb_frame_byte = ~hb_crc[31:24];
                 default: hb_frame_byte = 8'd0;
             endcase
         end
@@ -182,16 +182,17 @@ module gpg_vanity_backend_uart #(
                 HB_IDLE: begin
                     if (hb_pending && hit_ready && hb_ready) begin
                         hb_state    <= HB_SEND;
-                        hb_byte_idx <= 7'd5;
+                        hb_byte_idx <= 7'd0;
                         hb_crc      <= 32'hffffffff;
                         hb_pending  <= 1'b0;
                     end
                 end
                 HB_SEND: begin
                     if (hb_valid && hb_ready) begin
-                        hb_crc <= crc32_update_byte(hb_crc, hb_data);
+                        if (hb_byte_idx < 7'd70)
+                            hb_crc <= crc32_update_byte(hb_crc, hb_data);
                         if (hb_byte_idx == 7'd69)
-                            hb_byte_idx <= hb_byte_idx + 1'b1;  // CRC bytes
+                            hb_byte_idx <= hb_byte_idx + 1'b1;
                         else if (hb_byte_idx == 7'd73)
                             hb_state <= HB_IDLE;
                         else

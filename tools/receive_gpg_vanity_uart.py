@@ -157,21 +157,20 @@ def parse_frames(buffer):
 
         frame = bytes(buffer[:FRAME_LEN])
         body = frame[len(MAGIC):len(MAGIC) + BODY_LEN]
-        expected_crc = struct.unpack("<I", frame[-CRC_LEN:])[0]
-        actual_crc = binascii.crc32(body) & 0xffffffff
-        if actual_crc != expected_crc:
-            del buffer[0]
-            bad_crc += 1
-            continue
-
-        del buffer[:FRAME_LEN]
         class_id = body[0]
         if class_id == HEARTBEAT_CLASS:
+            del buffer[:FRAME_LEN]
             produced_count = int.from_bytes(body[1:9], byteorder="big")
             accepted_count = int.from_bytes(body[9:17], byteorder="big")
             stall_seed = int.from_bytes(body[17:25], byteorder="big")
             stall_output = int.from_bytes(body[25:33], byteorder="big")
             heartbeats.append((produced_count, accepted_count, stall_seed, stall_output))
+            continue
+        expected_crc = struct.unpack("<I", frame[-CRC_LEN:])[0]
+        actual_crc = binascii.crc32(body) & 0xffffffff
+        if actual_crc != expected_crc:
+            del buffer[0]
+            bad_crc += 1
             continue
         if class_id >= CLASS_COUNT:
             continue
