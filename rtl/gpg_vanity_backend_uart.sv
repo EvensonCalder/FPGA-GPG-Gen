@@ -154,7 +154,6 @@ module gpg_vanity_backend_uart #(
                 7'd35:   hb_frame_byte = stall_output_count[23:16];
                 7'd36:   hb_frame_byte = stall_output_count[15:8];
                 7'd37:   hb_frame_byte = stall_output_count[7:0];
-                7'd38..7'd69: hb_frame_byte = 8'd0;  // public key zero-pad
                 7'd70:   hb_frame_byte = hb_crc[7:0];
                 7'd71:   hb_frame_byte = hb_crc[15:8];
                 7'd72:   hb_frame_byte = hb_crc[23:16];
