@@ -227,7 +227,7 @@ module gpg_vanity_ht_search_top #(
         .BAUD(BAUD),
         .DEBUG_ACCEPT_ALL(DEBUG_ACCEPT_ALL),
         .MATCH_SUFFIX(1'b1),
-        .MATCH_PREFIX(1'b0)
+        .MATCH_PREFIX(1'b1)
     ) u_backend (
         .clk(sys_clk),
         .rst_n(sys_rst_n),
