@@ -5,8 +5,12 @@ import argparse
 HEX_ALPHABET = "0123456789ABCDEF"
 
 
-def same8(s):
-    return len(s) == 8 and all(ch == s[0] for ch in s)
+def xxxx_yyyy(s):
+    return (
+        len(s) == 8
+        and all(ch == s[0] for ch in s[:4])
+        and all(ch == s[4] for ch in s[4:])
+    )
 
 
 def classify_fingerprint(fingerprint_hex):
@@ -17,21 +21,21 @@ def classify_fingerprint(fingerprint_hex):
     hits = []
     suffix = fp[-8:]
     prefix = fp[:8]
-    if same8(suffix):
-        hits.append((0, "suffix", "same8", suffix))
-    if same8(prefix):
-        hits.append((1, "prefix", "same8", prefix))
+    if xxxx_yyyy(suffix):
+        hits.append((0, "suffix", "xxxx_yyyy", suffix))
+    if xxxx_yyyy(prefix):
+        hits.append((1, "prefix", "xxxx_yyyy", prefix))
     return hits
 
 
 def print_summary():
-    print("0 suffix_same8 16")
-    print("1 prefix_same8 16")
-    print("prefix_plus_suffix_total 32")
+    print("0 suffix_xxxx_yyyy 256")
+    print("1 prefix_xxxx_yyyy 256")
+    print("prefix_plus_suffix_total 512")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Classify 8-hex same-nibble GPG vanity fingerprint patterns.")
+    parser = argparse.ArgumentParser(description="Classify 8-hex XXXX/YYYY GPG vanity fingerprint patterns.")
     parser.add_argument("fingerprint", nargs="?", help="fingerprint hex to classify")
     parser.add_argument("--summary", action="store_true", help="print pattern-family counts")
     args = parser.parse_args()

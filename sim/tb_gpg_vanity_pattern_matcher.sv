@@ -27,9 +27,11 @@ module tb_gpg_vanity_pattern_matcher;
     endtask
 
     initial begin
-        check_case(160'haaaaaaaa0123456789abcdef0123456789abcdef, 1'b1, 4'h1);
-        check_case(160'h0123456789abcdef0123456789abcdef77777777, 1'b1, 4'h0);
+        check_case(160'h111122220123456789abcdef0123456789abcdef, 1'b1, 4'h1);
+        check_case(160'h0123456789abcdef0123456789abcdef33334444, 1'b1, 4'h0);
         check_case(160'hffffffff0123456789abcdef0123456700000000, 1'b1, 4'h0);
+        check_case(160'h111222220123456789abcdef0123456789abcdef, 1'b0, 4'h0);
+        check_case(160'h0123456789abcdef0123456789abcdef33334445, 1'b0, 4'h0);
         check_case(160'h0123456789abcdef0123456789abcdef01234567, 1'b0, 4'h0);
         $display("PASS tb_gpg_vanity_pattern_matcher");
         $finish;

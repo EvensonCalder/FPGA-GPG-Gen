@@ -1,13 +1,28 @@
 #!/usr/bin/env python3
 import argparse
+import binascii
 import os
 import shutil
 import subprocess
+import struct
 import tempfile
 
 
 def run(cmd, *, input_data=None, cwd=None):
     return subprocess.run(cmd, input=input_data, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+
+def make_heartbeat(produced, accepted, stall_seed, stall_output):
+    body = (
+        bytes([0xFE])
+        + produced.to_bytes(8, "big")
+        + accepted.to_bytes(8, "big")
+        + stall_seed.to_bytes(8, "big")
+        + stall_output.to_bytes(8, "big")
+        + bytes(32)
+    )
+    crc = struct.pack("<I", binascii.crc32(body) & 0xffffffff)
+    return b"GPGV1" + body + crc
 
 
 def main():
@@ -31,8 +46,10 @@ def main():
         frame1 = run([receiver, "--make-test-frame", "1", seed1, public1], cwd=repo).stdout
         with open(frame_path, "wb") as f:
             f.write(b"noise")
+            f.write(make_heartbeat(1000, 1000, 5, 0))
             f.write(frame0)
             f.write(b"more-noise")
+            f.write(make_heartbeat(10000, 10000, 10, 0))
             f.write(frame1)
 
         run([receiver, "--input-bin", frame_path, "--out-dir", out_dir, "--max-records", "2", "--quiet"], cwd=repo)

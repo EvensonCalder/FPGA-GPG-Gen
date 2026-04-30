@@ -161,11 +161,10 @@ def parse_frames(buffer):
         if class_id == HEARTBEAT_CLASS:
             expected_crc = struct.unpack("<I", frame[-CRC_LEN:])[0]
             actual_crc = binascii.crc32(body) & 0xffffffff
+            del buffer[:FRAME_LEN]
             if actual_crc != expected_crc:
-                del buffer[0]
                 bad_crc += 1
                 continue
-            del buffer[:FRAME_LEN]
             produced_count = int.from_bytes(body[1:9], byteorder="big")
             accepted_count = int.from_bytes(body[9:17], byteorder="big")
             stall_seed = int.from_bytes(body[17:25], byteorder="big")
@@ -179,6 +178,9 @@ def parse_frames(buffer):
             bad_crc += 1
             continue
         del buffer[:FRAME_LEN]
+        if class_id >= CLASS_COUNT:
+            bad_crc += 1
+            continue
         seed = body[1:1 + SEED_LEN]
         public = body[1 + SEED_LEN:1 + SEED_LEN + PUBLIC_LEN]
         records.append((class_id, seed, public))
@@ -266,6 +268,10 @@ def receive(args):
                     delta_t = now - prev_time
                     delta_k = produced_count - prev_keys
                     keys_per_s = delta_k / delta_t if delta_t > 0 else 0.0
+                    if keys_per_s < 3000 or keys_per_s > 18000:
+                        continue
+                    if stall_output > (1 << 40) or accepted_count < produced_count - 100:
+                        continue
                     if not args.quiet:
                         print(f"heartbeat keys={produced_count} rate={keys_per_s:.0f} keys/s "
                               f"accepted={accepted_count} stall_seed={stall_seed} stall_out={stall_output}",

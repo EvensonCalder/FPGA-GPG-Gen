@@ -28,8 +28,9 @@ module gpg_vanity_backend_uart #(
     logic [255:0] hit_public_key;
     logic [159:0] hit_fingerprint;
     logic hit_uart_tx;
+    logic hb_block_candidates;
 
-    assign candidate_ready = filter_candidate_ready && hit_ready;
+    assign candidate_ready = !hb_block_candidates && filter_candidate_ready && hit_ready;
 
     gpg_vanity_filter #(
         .DEBUG_ACCEPT_ALL(DEBUG_ACCEPT_ALL),
@@ -39,7 +40,7 @@ module gpg_vanity_backend_uart #(
         .clk(clk),
         .rst_n(rst_n),
         .timestamp(timestamp),
-        .candidate_valid(candidate_valid && hit_ready),
+        .candidate_valid(candidate_valid && !hb_block_candidates && hit_ready),
         .candidate_ready(filter_candidate_ready),
         .seed(candidate_seed),
         .public_key(candidate_public_key),
@@ -84,6 +85,8 @@ module gpg_vanity_backend_uart #(
     logic            hb_pending;
 
     logic [31:0]     hb_crc_final;
+
+    assign hb_block_candidates = hb_pending || (hb_state != HB_IDLE);
 
     function automatic [31:0] crc32_update_byte;
         input [31:0] crc_in;
@@ -183,7 +186,7 @@ module gpg_vanity_backend_uart #(
 
             case (hb_state)
                 HB_IDLE: begin
-                    if (hb_pending && hit_ready && hb_ready) begin
+                    if (hb_pending && filter_candidate_ready && hit_ready && hb_ready) begin
                         hb_state    <= HB_SEND;
                         hb_byte_idx <= 7'd0;
                         hb_crc      <= 32'hffffffff;
@@ -192,7 +195,7 @@ module gpg_vanity_backend_uart #(
                 end
                 HB_SEND: begin
                     if (hb_valid && hb_ready) begin
-                        if (hb_byte_idx < 7'd70)
+                        if (hb_byte_idx >= 7'd5 && hb_byte_idx < 7'd70)
                             hb_crc <= crc32_update_byte(hb_crc, hb_data);
                         if (hb_byte_idx == 7'd69) begin
                             hb_crc_final <= ~crc32_update_byte(hb_crc, hb_data);
