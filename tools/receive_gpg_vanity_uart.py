@@ -22,6 +22,8 @@ FRAME_LEN = len(MAGIC) + BODY_LEN + CRC_LEN
 CLASS_COUNT = 2
 CLASS_NAMES = ("suffix", "prefix")
 HEARTBEAT_CLASS = 0xFE
+HEARTBEAT_SHORT_BODY_LEN = 1 + 8 + 8
+HEARTBEAT_SHORT_FRAME_LEN = len(MAGIC) + HEARTBEAT_SHORT_BODY_LEN + CRC_LEN
 
 
 class RawSerial:
@@ -152,7 +154,22 @@ def parse_frames(buffer):
             break
         if idx > 0:
             del buffer[:idx]
-        if len(buffer) < FRAME_LEN:
+        if len(buffer) < HEARTBEAT_SHORT_FRAME_LEN:
+            break
+        class_id = buffer[len(MAGIC)]
+        if class_id == HEARTBEAT_CLASS:
+            body = bytes(buffer[len(MAGIC):len(MAGIC) + HEARTBEAT_SHORT_BODY_LEN])
+            expected_crc = struct.unpack("<I", buffer[len(MAGIC) + HEARTBEAT_SHORT_BODY_LEN:HEARTBEAT_SHORT_FRAME_LEN])[0]
+            actual_crc = binascii.crc32(body) & 0xffffffff
+            if actual_crc == expected_crc:
+                del buffer[:HEARTBEAT_SHORT_FRAME_LEN]
+                produced_count = int.from_bytes(body[1:9], byteorder="big")
+                accepted_count = int.from_bytes(body[9:17], byteorder="big")
+                heartbeats.append((produced_count, accepted_count, 0, 0))
+                continue
+            if len(buffer) < FRAME_LEN:
+                break
+        elif len(buffer) < FRAME_LEN:
             break
 
         frame = bytes(buffer[:FRAME_LEN])

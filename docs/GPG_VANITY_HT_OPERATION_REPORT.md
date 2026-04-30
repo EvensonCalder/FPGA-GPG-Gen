@@ -4,6 +4,7 @@
 
 - Final stable bitstream is built, timed, JTAG-programmed, written to board Quad SPI Flash, and boot-verified from Flash.
 - Host auto-start was not configured. Real use is: power the board, then manually start the receiver script.
+- Real UART heartbeat CRC was verified from the flashed image using the short heartbeat format: 13 valid heartbeat frames, 0 bad heartbeat frames, 0 junk bytes in the latest 60-second capture.
 
 ## FPGA Image
 
@@ -25,12 +26,13 @@
 - Config: `LANES=2`, `MUL_LANES=1`, `TRNG_CORES=2`, `USE_PLL=1`.
 - Clock: `64.705882 MHz`.
 - Keygen rate: `7152 cycles/key`, about `9047 keys/s`.
-- Expected suffix hit time: about `8.24 h`.
+- Pattern mode: prefix and suffix `XXXX/YYYY`, 512 total pattern classes.
+- Expected hit time for the current 512-pattern search is about 15 minutes on average.
 
 ## Timing
 
-- WNS: `+0.562 ns`.
-- WHS: `+0.028 ns`.
+- WNS: `+0.184 ns`.
+- WHS: `+0.044 ns`.
 - TNS/THS: `0.000`.
 - Failed setup/hold endpoints: `0`.
 
@@ -54,4 +56,5 @@ build/gpg_vanity_real_hits_gpg/
 
 - Stable serial path: `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`.
 - Baud: `2000000`.
-- Receiver smoke test opened the port and reported `accepted=0 bad_crc=0`, as expected without an immediate rare hit.
+- Heartbeat frame format: `GPGV1 || 0xFE || produced_count[8] || accepted_count[8] || crc32[4]`.
+- Receiver smoke test and real hardware capture reported valid CRCs and no malformed heartbeat frames.

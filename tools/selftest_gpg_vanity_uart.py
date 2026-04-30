@@ -25,6 +25,12 @@ def make_heartbeat(produced, accepted, stall_seed, stall_output):
     return b"GPGV1" + body + crc
 
 
+def make_short_heartbeat(produced, accepted):
+    body = bytes([0xFE]) + produced.to_bytes(8, "big") + accepted.to_bytes(8, "big")
+    crc = struct.pack("<I", binascii.crc32(body) & 0xffffffff)
+    return b"GPGV1" + body + crc
+
+
 def main():
     parser = argparse.ArgumentParser(description="Self-test the GPG vanity UART frame receiver with synthetic frames.")
     parser.add_argument("--keep", action="store_true", help="keep the temporary output directory")
@@ -49,6 +55,7 @@ def main():
             f.write(make_heartbeat(1000, 1000, 5, 0))
             f.write(frame0)
             f.write(b"more-noise")
+            f.write(make_short_heartbeat(2000, 1999))
             f.write(make_heartbeat(10000, 10000, 10, 0))
             f.write(frame1)
 

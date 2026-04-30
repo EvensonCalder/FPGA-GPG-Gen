@@ -6,6 +6,7 @@
 - Flash boot was verified with Vivado: `DONE_PIN 1`, `EOS 1`.
 - Host auto-start is not configured. Start the receiver manually when needed.
 - Final stable performance is about `9047 keys/s`.
+- Heartbeat UART frames are CRC-checked short status frames and were verified on real hardware with no bad frames in the latest capture.
 
 ## Normal Use
 
@@ -113,13 +114,23 @@ Runtime log:
 build/gpg_vanity_receiver.log
 ```
 
-The receiver prints an idle status line every 60 seconds, for example:
+The receiver prints heartbeat/rate status when heartbeat frames arrive. It also prints an idle status line every 60 seconds if no heartbeat or hit has been seen.
+
+Heartbeat frames carry counters, not private key material. The current hardware heartbeat format is:
+
+```text
+GPGV1 || 0xFE || produced_count[8] || accepted_count[8] || crc32[4]
+```
+
+The CRC covers the heartbeat body beginning with `0xFE`. The receiver also accepts the older 74-byte padded heartbeat format for compatibility.
+
+Example idle line:
 
 ```text
 rate hits/s=0.000 keys/s=N/A accepted=0 bad_crc=0
 ```
 
-That means the receiver is alive and listening; hits are rare, so `accepted=0` is normal for long periods.
+That means the receiver is alive and listening. Hits are rare, so hit counts remaining at zero for long periods is normal.
 
 Watch the log live:
 
@@ -309,8 +320,8 @@ python3 tools/selftest_gpg_vanity_uart.py
 ## Final Signoff Numbers
 
 ```text
-WNS = +0.562 ns
-WHS = +0.028 ns
+WNS = +0.184 ns
+WHS = +0.044 ns
 TNS = 0.000
 THS = 0.000
 failed setup endpoints = 0
@@ -320,11 +331,11 @@ failed hold endpoints = 0
 Resource use:
 
 ```text
-LUT = 73567 / 101400 = 72.55%
-FF = 65072 / 202800 = 32.09%
+LUT = 74021 / 101400 = 73.00%
+FF = 65490 / 202800 = 32.29%
 BRAM tile = 192 / 325 = 59.08%
 DSP = 473 / 600 = 78.83%
-Slice = 24161 / 25350 = 95.31%
+Slice = 23499 / 25350 = 92.70%
 ```
 
 Throughput:
@@ -337,8 +348,8 @@ expected suffix hit time = 8.24 h
 
 ## Notes
 
-- The FPGA hot path performs seed generation, Ed25519 public key generation, OpenPGP fingerprinting, and suffix matching.
+- The FPGA hot path performs seed generation, Ed25519 public key generation, OpenPGP fingerprinting, and prefix/suffix matching.
 - The host only receives hits and writes records/files.
-- Current final bitstream matches suffix pattern: last 8 fingerprint hex characters all equal.
+- Current final bitstream checks `XXXX/YYYY` prefix and suffix pattern classes.
 - Report: `docs/GPG_VANITY_HT_OPERATION_REPORT.md`
 - Hardware facts: `PROJECT_SPEC.md`

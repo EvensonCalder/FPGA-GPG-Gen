@@ -9,15 +9,14 @@ module uart_tx #(
     input  wire [7:0] data,
     input  wire       valid,
     output wire       ready,
-    output reg        tx
+    output reg        tx,
+    output reg        busy
 );
     localparam integer CLKS_PER_BIT = CLK_HZ / BAUD;
 
     reg [15:0] baud_count;
     reg [3:0] bit_index;
     reg [9:0] shifter;
-    reg busy;
-
     assign ready = !busy;
 
     always @(posedge clk or negedge rst_n) begin

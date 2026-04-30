@@ -11,7 +11,8 @@ module gpg_vanity_hit_uart #(
     input  logic [3:0]   hit_class_id,
     input  logic [255:0] hit_seed,
     input  logic [255:0] hit_public_key,
-    output logic         uart_tx
+    output logic         uart_tx,
+    output logic         tx_busy
 );
     logic [7:0] uart_data;
     logic uart_valid;
@@ -39,6 +40,7 @@ module gpg_vanity_hit_uart #(
         .data(uart_data),
         .valid(uart_valid),
         .ready(uart_ready),
+        .busy(tx_busy),
         .tx(uart_tx)
     );
 endmodule

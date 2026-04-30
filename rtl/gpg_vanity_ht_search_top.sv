@@ -3,6 +3,7 @@
 module gpg_vanity_ht_search_top #(
     parameter integer CLK_HZ = 50000000,
     parameter integer BAUD = 2000000,
+    parameter integer HB_PERIOD = 0,
     parameter logic [31:0] TIMESTAMP = 32'd1700000000,
     parameter string INIT_FILE = "build/ht_fixedbase_table.mem",
     parameter integer LANES = 1,
@@ -225,6 +226,7 @@ module gpg_vanity_ht_search_top #(
     gpg_vanity_backend_uart #(
         .CLK_HZ(BACKEND_CLK_HZ),
         .BAUD(BAUD),
+        .HB_PERIOD(HB_PERIOD),
         .DEBUG_ACCEPT_ALL(DEBUG_ACCEPT_ALL),
         .MATCH_SUFFIX(1'b1),
         .MATCH_PREFIX(1'b1)
