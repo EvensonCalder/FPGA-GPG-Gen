@@ -174,6 +174,7 @@ def parse_frames(buffer):
             continue
         if class_id >= CLASS_COUNT:
             continue
+        del buffer[:FRAME_LEN]
         seed = body[1:1 + SEED_LEN]
         public = body[1 + SEED_LEN:1 + SEED_LEN + PUBLIC_LEN]
         records.append((class_id, seed, public))
