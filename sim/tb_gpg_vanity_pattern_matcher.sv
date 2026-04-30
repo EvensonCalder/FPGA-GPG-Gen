@@ -33,6 +33,7 @@ module tb_gpg_vanity_pattern_matcher;
         check_case(160'h111222220123456789abcdef0123456789abcdef, 1'b0, 4'h0);
         check_case(160'h0123456789abcdef0123456789abcdef33334445, 1'b0, 4'h0);
         check_case(160'h0123456789abcdef0123456789abcdef01234567, 1'b0, 4'h0);
+        check_case(160'hb9aa51839968da86017ed4b69911a7b5bba59f1f, 1'b0, 4'h0);
         $display("PASS tb_gpg_vanity_pattern_matcher");
         $finish;
     end

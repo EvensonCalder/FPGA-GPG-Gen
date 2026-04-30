@@ -10,7 +10,8 @@ import sys
 import termios
 import time
 
-from openpgp_ed25519 import openpgp_v4_ed25519_secret_key_packet
+from gpg_vanity_patterns import classify_fingerprint
+from openpgp_ed25519 import openpgp_v4_ed25519_fingerprint, openpgp_v4_ed25519_secret_key_packet, public_from_seed
 
 
 MAGIC = b"GPGV1"
@@ -234,6 +235,16 @@ def write_record(files, class_id, seed, public, sync, *, gpg_dir=None, timestamp
         write_openpgp_secret_file(gpg_dir, class_id, seed, public, timestamp, sync)
 
 
+def verify_hit_record(class_id, seed, public, timestamp, verify_seed):
+    if verify_seed and public_from_seed(seed) != public:
+        return False, "seed does not derive public key"
+    fingerprint = openpgp_v4_ed25519_fingerprint(public, timestamp).hex().upper()
+    hit_classes = {hit[0] for hit in classify_fingerprint(fingerprint)}
+    if class_id not in hit_classes:
+        return False, f"fingerprint {fingerprint} does not match class {CLASS_NAMES[class_id]}"
+    return True, fingerprint
+
+
 def receive(args):
     disable_core_dumps()
     if args.mlock:
@@ -296,6 +307,13 @@ def receive(args):
                 last_hb = (now, produced_count)
                 last_report = now
             for class_id, seed, public in records:
+                if not args.no_verify_hit:
+                    ok, detail = verify_hit_record(class_id, seed, public, args.timestamp, args.verify_seed)
+                    if not ok:
+                        bad_crc += 1
+                        if not args.quiet:
+                            print(f"rejected class={CLASS_NAMES[class_id]} reason={detail}", file=sys.stderr, flush=True)
+                        continue
                 write_record(files, class_id, seed, public, not args.no_fsync,
                              gpg_dir=args.gpg_dir, timestamp=args.timestamp)
                 total += 1
@@ -337,6 +355,10 @@ def main():
     parser.add_argument("--timestamp", type=lambda x: int(x, 0), default=1700000000,
                         help="OpenPGP creation timestamp for --gpg-dir output")
     parser.add_argument("--mlock", action="store_true", help="try to lock process memory")
+    parser.add_argument("--no-verify-hit", action="store_true",
+                        help="do not recompute fingerprint/pattern before writing hits")
+    parser.add_argument("--verify-seed", action="store_true",
+                        help="also derive public key from seed before writing hits; requires cryptography")
     parser.add_argument("--quiet", action="store_true", help="suppress progress messages")
     parser.add_argument("--input-bin", help="read frames from a binary file instead of UART, for tests")
     parser.add_argument("--make-test-frame", nargs=3, metavar=("CLASS", "SEED_HEX", "PUBLIC_HEX"),

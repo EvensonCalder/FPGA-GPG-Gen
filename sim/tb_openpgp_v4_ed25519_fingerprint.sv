@@ -37,7 +37,15 @@ module tb_openpgp_v4_ed25519_fingerprint;
         @(posedge clk);
         start = 1'b0;
 
-        wait (done);
+        @(posedge clk);
+        while (!done) begin
+            if (!busy) begin
+                $display("busy dropped before done");
+                $fatal(1);
+            end
+            @(posedge clk);
+        end
+
         if (fingerprint !== EXPECTED_FP) begin
             $display("fingerprint mismatch");
             $display("expected=%h", EXPECTED_FP);

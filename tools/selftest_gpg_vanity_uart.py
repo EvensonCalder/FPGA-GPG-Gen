@@ -59,7 +59,7 @@ def main():
             f.write(make_heartbeat(10000, 10000, 10, 0))
             f.write(frame1)
 
-        run([receiver, "--input-bin", frame_path, "--out-dir", out_dir, "--max-records", "2", "--quiet"], cwd=repo)
+        run([receiver, "--input-bin", frame_path, "--out-dir", out_dir, "--max-records", "2", "--quiet", "--no-verify-hit"], cwd=repo)
 
         with open(os.path.join(out_dir, "class_suffix.txt"), "r", encoding="ascii") as f:
             line0 = f.read().strip()

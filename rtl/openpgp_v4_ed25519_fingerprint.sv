@@ -28,7 +28,7 @@ module openpgp_v4_ed25519_fingerprint (
     logic [31:0] w [0:79];
     logic [511:0] init_block;
 
-    assign busy = (state == ST_RUN);
+    assign busy = (state != ST_IDLE);
 
     function automatic [31:0] rol32;
         input [31:0] x;
