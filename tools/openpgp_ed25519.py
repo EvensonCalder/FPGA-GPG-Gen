@@ -22,6 +22,20 @@ def mpi_from_opaque(data):
     return bit_len.to_bytes(2, "big") + data
 
 
+def mpi_from_fixed_opaque(data):
+    if not data:
+        return b"\x00\x00"
+    return (len(data) * 8).to_bytes(2, "big") + data
+
+
+def mpi_from_ed25519_secret_seed(seed):
+    if len(seed) != 32:
+        raise ValueError("Ed25519 seed must be 32 bytes")
+    if seed[0] == 0:
+        return mpi_from_fixed_opaque(seed)
+    return mpi_from_opaque(seed)
+
+
 def openpgp_v4_ed25519_public_body(public_key, timestamp):
     if len(public_key) != 32:
         raise ValueError("Ed25519 public key must be 32 bytes")
@@ -62,7 +76,7 @@ def openpgp_v4_ed25519_secret_body(seed, public_key, timestamp):
     if len(seed) != 32:
         raise ValueError("Ed25519 seed must be 32 bytes")
     public_body = openpgp_v4_ed25519_public_body(public_key, timestamp)
-    secret_mpi = mpi_from_opaque(seed)
+    secret_mpi = mpi_from_ed25519_secret_seed(seed)
     checksum = (sum(secret_mpi) & 0xffff).to_bytes(2, "big")
     return public_body + b"\x00" + secret_mpi + checksum
 
